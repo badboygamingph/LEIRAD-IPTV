@@ -1043,8 +1043,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           isFullscreen
             ? 'w-full h-full max-w-none rounded-none aspect-auto fixed inset-0 z-50'
             : isTheaterMode
-            ? 'aspect-video max-w-7xl rounded-2xl border border-white/10'
-            : 'aspect-video max-w-5xl rounded-2xl border border-white/10 ring-1 ring-white/5'
+            ? 'aspect-video max-w-7xl rounded-xl sm:rounded-2xl border border-white/10'
+            : 'aspect-video max-w-5xl lg:max-w-6xl xl:max-w-7xl rounded-xl sm:rounded-2xl border border-white/10 ring-1 ring-white/5'
         } ${!showControls && !isSidebarOpen && !isControlsPinned ? 'cursor-none [&_*]:cursor-none' : ''}`}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
@@ -1132,28 +1132,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {/* TV-Style Volume On-Screen Display (HUD) on Video Stream */}
           {showVolumeOsd && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95">
-              <div className="flex flex-col items-center gap-2.5 px-6 py-4 rounded-2xl bg-black/90 border border-white/20 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] min-w-[220px]">
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl bg-black/90 border border-white/20 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] min-w-[190px] sm:min-w-[220px] max-w-[88vw]">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/10 flex items-center justify-center">
                   {isMuted || volume === 0 ? (
-                    <VolumeX className="w-6 h-6 text-rose-400" />
+                    <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400" />
                   ) : volume < 0.5 ? (
-                    <Volume1 className="w-6 h-6 text-cyan-400" />
+                    <Volume1 className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
                   ) : (
-                    <Volume2 className="w-6 h-6 text-cyan-400" />
+                    <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
                   )}
                 </div>
 
                 <div className="text-center">
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                  <div className="text-[9px] sm:text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
                     {isCurrentYouTube ? 'YouTube Live Audio' : 'Master Volume'}
                   </div>
-                  <div className="text-2xl font-black text-white font-mono mt-0.5">
+                  <div className="text-xl sm:text-2xl font-black text-white font-mono mt-0.5">
                     {isMuted || volume === 0 ? 'MUTED' : `${Math.round(volume * 100)}%`}
                   </div>
                 </div>
 
                 {/* Animated Volume Level Progress Bar */}
-                <div className="w-36 h-2 rounded-full bg-white/15 overflow-hidden">
+                <div className="w-32 sm:w-36 h-2 rounded-full bg-white/15 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-150 ${
                       isMuted || volume === 0
@@ -1169,41 +1169,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
           {/* Clean Cinematic On-Screen Display (OSD Banner) when switching channels or hovering */}
           {showOsd && (
-            <div className="absolute top-4 left-4 right-4 z-20 pointer-events-none transition-all duration-300">
-              <div className="inline-flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md max-w-full">
-                <div className="flex items-center gap-3 min-w-0">
+            <div className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 z-20 pointer-events-none transition-all duration-300">
+              <div className="inline-flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl bg-slate-950/90 border border-white/10 shadow-2xl backdrop-blur-md max-w-[calc(100vw-1rem)] sm:max-w-full">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {channel.logo ? (
                     <img
                       src={channel.logo}
                       alt=""
-                      className="w-10 h-10 object-contain rounded-lg bg-black/60 p-1 border border-white/10 shrink-0"
+                      className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-lg bg-black/60 p-1 border border-white/10 shrink-0"
                       onError={(e) => {
                         (e.currentTarget as HTMLElement).style.display = 'none';
                       }}
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-bold text-[10px] text-cyan-400 shrink-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-bold text-[9px] sm:text-[10px] text-cyan-400 shrink-0">
                       LEIRAD
                     </div>
                   )}
 
                   <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base font-bold text-white truncate drop-shadow">
+                    <h3 className="text-xs sm:text-base font-bold text-white truncate drop-shadow">
                       {channel.name}
                     </h3>
-                    <p className="text-xs text-slate-300 flex items-center gap-2 mt-0.5 truncate font-normal">
+                    <p className="text-[10px] sm:text-xs text-slate-300 flex items-center gap-1.5 sm:gap-2 mt-0.5 truncate font-normal">
                       <span>{channel.countryFlag} {channel.countryName}</span>
                       <span className="text-slate-500">·</span>
                       <span className="text-cyan-400 font-medium">{channel.group}</span>
                       <span className="text-slate-500">·</span>
-                      <span className="font-mono text-slate-400 text-[11px]">{channel.quality}</span>
+                      <span className="font-mono text-slate-400 text-[10px] sm:text-[11px]">{channel.quality}</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-white/10">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 pl-1.5 sm:pl-2 border-l border-white/10">
                   <span
-                    className={`text-[11px] font-mono font-bold tracking-wider uppercase ${
+                    className={`text-[10px] sm:text-[11px] font-mono font-bold tracking-wider uppercase ${
                       isCurrentYouTube ? 'text-rose-400' : 'text-emerald-400'
                     }`}
                   >
@@ -1235,21 +1235,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <img
                   src={channel.logo}
                   alt=""
-                  className="w-16 h-16 object-contain rounded-2xl bg-white/5 p-2 border border-white/10 mb-4 shadow-xl"
+                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded-2xl bg-white/5 p-2 border border-white/10 mb-2 sm:mb-4 shadow-xl"
                   onError={(e) => {
                     (e.currentTarget as HTMLElement).style.display = 'none';
                   }}
                 />
               ) : (
-                <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-cyan-400 mb-4 shadow-xl">
-                  <Tv className="w-8 h-8" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-cyan-400 mb-2 sm:mb-4 shadow-xl">
+                  <Tv className="w-6 h-6 sm:w-8 sm:h-8" />
                 </div>
               )}
 
-              <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight drop-shadow mb-1">
+              <h3 className="text-lg sm:text-2xl font-bold text-white tracking-tight drop-shadow mb-1">
                 {channel.name}
               </h3>
-              <p className="text-xs sm:text-sm text-slate-400 flex items-center justify-center gap-2 font-normal mb-6">
+              <p className="text-xs sm:text-sm text-slate-400 flex items-center justify-center gap-1.5 sm:gap-2 font-normal mb-3 sm:mb-6">
                 {channel.countryFlag && <span>{channel.countryFlag}</span>}
                 <span>{channel.countryName}</span>
                 <span className="text-slate-600">·</span>
@@ -1260,12 +1260,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
               {/* State A: Tuning / Connecting */}
               {status === 'tuning' && (
-                <div className="flex flex-col items-center space-y-3">
-                  <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-cyan-950/70 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-lg">
-                    <Radio className="w-4 h-4 animate-spin text-cyan-400" />
+                <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                  <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-cyan-950/70 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-lg">
+                    <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-cyan-400" />
                     <span>Connecting with Anti-Buffer Turbo Engine...</span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-[11px] sm:text-xs text-slate-400">
                     Pre-fetching initial stream segments for fast, buffer-free playback
                   </p>
                 </div>
@@ -1273,14 +1273,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
               {/* State B: Resting / Off-Air with Auto-Tune to Next Working Station */}
               {status === 'resting' && (
-                <div className="flex flex-col items-center space-y-4">
+                <div className="flex flex-col items-center space-y-3 sm:space-y-4">
                   {autoSkipCountdown !== null ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-semibold shadow-lg">
-                        <Zap className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+                      <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-semibold shadow-lg">
+                        <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 animate-pulse" />
                         <span>Auto-tuning next working station in {autoSkipCountdown}s...</span>
                       </div>
-                      <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
+                      <p className="text-[11px] sm:text-xs text-slate-400 max-w-sm leading-relaxed">
                         Station is resting or off air. Smoothly advancing to keep stream uninterrupted.
                       </p>
                     </div>
@@ -1297,13 +1297,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   )}
 
                   {/* Direct Action Buttons */}
-                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 pt-1 sm:pt-2">
                     <button
                       onClick={() => {
                         clearAutoSkip();
                         onNextChannel();
                       }}
-                      className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 rounded-xl transition-all cursor-pointer shadow-lg active:scale-95"
+                      className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 rounded-xl transition-all cursor-pointer shadow-lg active:scale-95"
                     >
                       <ChevronRight className="w-4 h-4" />
                       <span>Tune Next Working Station</span>
@@ -1312,7 +1312,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     {autoSkipCountdown !== null && (
                       <button
                         onClick={clearAutoSkip}
-                        className="px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-white/5 border border-white/10 rounded-xl transition-colors cursor-pointer"
+                        className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-white/5 border border-white/10 rounded-xl transition-colors cursor-pointer"
                       >
                         Stay On Station
                       </button>
@@ -1320,7 +1320,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                     <button
                       onClick={handleRetry}
-                      className="flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-white bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl transition-colors cursor-pointer active:scale-95"
+                      className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium text-white bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl transition-colors cursor-pointer active:scale-95"
                     >
                       <RotateCw className="w-3.5 h-3.5" />
                       <span>Try Again</span>
@@ -1329,7 +1329,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     {onOpenGuide && (
                       <button
                         onClick={onOpenGuide}
-                        className="flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors cursor-pointer active:scale-95"
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors cursor-pointer active:scale-95"
                       >
                         <ListFilter className="w-3.5 h-3.5 text-cyan-400" />
                         <span>Select Channels</span>
@@ -1343,9 +1343,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               {status === 'idle' && (
                 <button
                   onClick={togglePlay}
-                  className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm shadow-xl shadow-cyan-500/25 transition-all cursor-pointer active:scale-95"
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-cyan-500/25 transition-all cursor-pointer active:scale-95"
                 >
-                  <Play className="w-5 h-5 fill-current" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                   <span>Click to Play Stream</span>
                 </button>
               )}
@@ -1384,18 +1384,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 }, isFullscreen ? 6500 : 3500);
               }
             }}
-            className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 pb-4 sm:pb-6 bg-gradient-to-t from-black/98 via-black/85 to-transparent flex flex-col gap-2 z-40 transition-all duration-300 ${
+            className={`absolute bottom-0 inset-x-0 p-2 sm:p-4 md:p-5 pb-3 sm:pb-6 bg-gradient-to-t from-black/98 via-black/85 to-transparent flex flex-col gap-2 z-40 transition-all duration-300 ${
               showControls || isSidebarOpen || isControlsPinned
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 translate-y-3 pointer-events-none'
             }`}
           >
-            <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
+            <div className="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
               {/* Left Side: Prev Channel, Play/Pause, Next Channel, Volume, Anti-Buffer Badge */}
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
                 <button
                   onClick={onPrevChannel}
-                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10 backdrop-blur-md active:scale-95"
+                  className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/10 backdrop-blur-md active:scale-95"
                   title="Tune previous working station (Skips off-air channels)"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1404,19 +1404,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 <button
                   onClick={togglePlay}
-                  className="w-10 h-10 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center transition-all cursor-pointer shadow-lg shadow-cyan-500/25 active:scale-95"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center transition-all cursor-pointer shadow-lg shadow-cyan-500/25 active:scale-95 shrink-0"
                   title={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? (
-                    <Pause className="w-5 h-5 fill-current" />
+                    <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                   ) : (
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
+                    <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
                   )}
                 </button>
 
                 <button
                   onClick={onNextChannel}
-                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10 backdrop-blur-md active:scale-95"
+                  className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/10 backdrop-blur-md active:scale-95"
                   title="Tune next working station (Skips off-air channels)"
                 >
                   <span className="hidden sm:inline">NEXT CH</span>
@@ -1424,10 +1424,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </button>
 
                 {/* Volume & Mute */}
-                <div className="flex items-center gap-2 pl-1 sm:pl-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 pl-0.5 sm:pl-2">
                   <button
                     onClick={toggleMute}
-                    className="p-2 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    className="p-1.5 sm:p-2 text-slate-300 hover:text-white transition-colors cursor-pointer"
                     title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
                   >
                     {isMuted || volume === 0 ? (
@@ -1446,10 +1446,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     value={isMuted ? 0 : volume}
                     onChange={handleVolumeChange}
                     onInput={handleVolumeChange}
-                    className="w-16 sm:w-20 accent-cyan-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
+                    className="w-14 sm:w-20 accent-cyan-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
                     title={`Volume: ${Math.round(volume * 100)}%`}
                   />
-                  <span className="font-mono text-xs font-bold text-slate-200 min-w-[34px] select-none text-left">
+                  <span className="font-mono text-[10px] sm:text-xs font-bold text-slate-200 min-w-[28px] sm:min-w-[34px] select-none text-left">
                     {isMuted || volume === 0 ? 'MUTED' : `${Math.round(volume * 100)}%`}
                   </span>
                 </div>
@@ -1490,11 +1490,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
 
               {/* Right Side: Pin Controls, Favorite, Sidebar Channel Selector, PiP, Fullscreen */}
-              <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto sm:ml-0 shrink-0">
                 {/* Pin Controls (Always Visible) Toggle Button */}
                 <button
                   onClick={toggleControlsPinned}
-                  className={`p-2 rounded-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`p-1.5 sm:p-2 rounded-lg border transition-all cursor-pointer active:scale-95 ${
                     isControlsPinned
                       ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-sm shadow-cyan-500/20'
                       : 'bg-white/5 text-slate-300 hover:text-white border-white/10 hover:bg-white/10'
@@ -1506,36 +1506,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   }
                 >
                   {isControlsPinned ? (
-                    <Pin className="w-4 h-4 fill-current text-cyan-400" />
+                    <Pin className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-cyan-400" />
                   ) : (
-                    <PinOff className="w-4 h-4" />
+                    <PinOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   )}
                 </button>
 
                 <button
                   onClick={onToggleFavorite}
-                  className={`p-2 rounded-lg border transition-colors cursor-pointer active:scale-95 ${
+                  className={`p-1.5 sm:p-2 rounded-lg border transition-colors cursor-pointer active:scale-95 ${
                     isFavorite
                       ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                       : 'bg-white/5 text-slate-300 hover:text-white border-white/10 hover:bg-white/10'
                   }`}
                   title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
                 >
-                  <Bookmark className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+                  <Bookmark className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
                 </button>
 
                 {/* OPEN SIDEBAR CHANNEL SELECTOR ON RIGHT */}
                 {onOpenGuide && (
                   <button
                     onClick={onOpenGuide}
-                    className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border shadow-md active:scale-95 ${
+                    className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border shadow-md active:scale-95 ${
                       isSidebarOpen
                         ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-cyan-500/30'
                         : 'bg-white/10 hover:bg-white/20 text-white border-white/10 backdrop-blur-md'
                     }`}
                     title="Open Channel Selector Sidebar (G)"
                   >
-                    <ListFilter className="w-4 h-4 text-cyan-400" />
+                    <ListFilter className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
                     <span>Channels</span>
                     {totalChannels > 0 && (
                       <span className="px-1.5 py-0.2 rounded bg-black/40 text-[10px] font-mono text-cyan-300">
@@ -1547,21 +1547,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 <button
                   onClick={togglePiP}
-                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer hidden sm:flex"
+                  className="p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer hidden sm:flex"
                   title="Picture in Picture"
                 >
-                  <PictureInPicture2 className="w-4 h-4" />
+                  <PictureInPicture2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
                 <button
                   onClick={toggleFullscreen}
-                  className="p-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all cursor-pointer shadow-lg shadow-cyan-500/25 active:scale-95"
+                  className="p-1.5 sm:p-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all cursor-pointer shadow-lg shadow-cyan-500/25 active:scale-95"
                   title={isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen Stream (F)'}
                 >
                   {isFullscreen ? (
-                    <Minimize2 className="w-4 h-4" />
+                    <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   ) : (
-                    <Maximize2 className="w-4 h-4" />
+                    <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   )}
                 </button>
               </div>

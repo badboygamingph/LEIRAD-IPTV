@@ -622,7 +622,7 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                   key={c.id}
                   id={`channel-item-${c.id}`}
                   onClick={() => onSelectChannel(c)}
-                  className={`w-full text-left p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all cursor-pointer group active:scale-[0.99] select-none ${
+                  className={`w-full text-left p-2.5 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-2 sm:gap-3 transition-all cursor-pointer group active:scale-[0.99] select-none ${
                     isCurrent
                       ? 'bg-cyan-950/80 border-cyan-400 text-white shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400/50'
                       : isBroken
@@ -631,10 +631,10 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                   }`}
                 >
                   {/* Left: Channel Number Box + Logo + Name & Metadata */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                     {/* Clear Channel Number Badge */}
                     <span
-                      className={`font-mono text-xs font-bold px-2 py-1 rounded-xl border shrink-0 text-center min-w-[42px] ${
+                      className={`font-mono text-[11px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-xl border shrink-0 text-center min-w-[36px] sm:min-w-[42px] ${
                         isCurrent
                           ? 'bg-cyan-500 text-slate-950 border-cyan-400'
                           : 'bg-slate-950 text-slate-400 border-slate-800 group-hover:text-cyan-300 group-hover:border-slate-700'
@@ -644,7 +644,7 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                     </span>
 
                     {/* Logo Box */}
-                    <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-950 border border-slate-800 p-1 flex items-center justify-center shrink-0 overflow-hidden">
                       {c.logo ? (
                         <img
                           src={c.logo}
@@ -657,7 +657,7 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                           className="w-full h-full object-contain"
                         />
                       ) : (
-                        <span className="text-xs font-bold text-slate-500 font-mono">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 font-mono">
                           {c.name.slice(0, 2).toUpperCase()}
                         </span>
                       )}
@@ -713,24 +713,24 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                   </div>
 
                   {/* Right Actions: Favorite & Play Button */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleFavorite(c, e);
                       }}
-                      className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                      className={`p-1.5 sm:p-2 rounded-xl border transition-colors cursor-pointer ${
                         isFav
                           ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
                           : 'bg-slate-950 text-slate-500 hover:text-amber-400 border-slate-800 hover:border-slate-700'
                       }`}
                       title={isFav ? 'Remove from favorites' : 'Add to favorites'}
                     >
-                      <Bookmark className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                      <Bookmark className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFav ? 'fill-current' : ''}`} />
                     </button>
 
                     <button
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      className={`px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                         isCurrent
                           ? 'bg-cyan-400 text-slate-950 shadow-sm'
                           : 'bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border border-cyan-500/30'

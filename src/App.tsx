@@ -849,7 +849,7 @@ export const App: React.FC = () => {
         {channels.length > 0 && (
           <div
             ref={playerSectionRef}
-            className="w-full max-w-5xl [&:fullscreen]:max-w-none [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:bg-black flex flex-col items-center justify-center"
+            className="w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl [&:fullscreen]:max-w-none [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:bg-black flex flex-col items-center justify-center transition-all duration-300"
           >
             <VideoPlayer
               channel={activeChannel}
