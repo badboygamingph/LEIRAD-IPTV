@@ -59,6 +59,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   children,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
@@ -139,13 +140,73 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
-  // Synchronize volume & mute to video element without tearing down stream
+  const isCurrentYouTube = Boolean(channel && (channel.isYouTube || isYouTubeUrl(channel.url)));
+
+  // Synchronize volume and mute to embedded YouTube iframe via postMessage API
+  const syncYouTubeVolume = useCallback(
+    (targetVol: number, targetMuted: boolean) => {
+      if (!iframeRef.current?.contentWindow) return;
+      const ytVolume = Math.round(targetVol * 100);
+      try {
+        if (targetMuted || ytVolume === 0) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+            '*'
+          );
+        } else {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+            '*'
+          );
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'setVolume', args: [ytVolume] }),
+            '*'
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to sync YouTube volume:', err);
+      }
+    },
+    []
+  );
+
+  // Synchronize volume & mute to video element AND YouTube iframe without tearing down stream
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.volume = volume;
       videoRef.current.muted = isMuted;
     }
-  }, [volume, isMuted]);
+    if (isCurrentYouTube) {
+      syncYouTubeVolume(volume, isMuted);
+    }
+  }, [volume, isMuted, isCurrentYouTube, syncYouTubeVolume]);
+
+  // Bidirectional listener: receive play/pause and volume events from YouTube iframe
+  useEffect(() => {
+    if (!isCurrentYouTube) return;
+
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        if (typeof e.data !== 'string') return;
+        const data = JSON.parse(e.data);
+        if (data.event === 'infoDelivery' && data.info) {
+          if (typeof data.info.playerState === 'number') {
+            if (data.info.playerState === 1) setIsPlaying(true);
+            else if (data.info.playerState === 2) setIsPlaying(false);
+          }
+          if (typeof data.info.muted === 'boolean') {
+            setIsMuted(data.info.muted);
+          }
+          if (typeof data.info.volume === 'number' && !data.info.muted) {
+            setVolume(data.info.volume / 100);
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isCurrentYouTube]);
 
   // Track live forward buffer depth every second
   useEffect(() => {
@@ -272,8 +333,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (osdTimeoutRef.current) window.clearTimeout(osdTimeoutRef.current);
     };
   }, [channel?.id]);
-
-  const isCurrentYouTube = Boolean(channel && (channel.isYouTube || isYouTubeUrl(channel.url)));
 
   // Primary playback initialization: ONLY runs when channel URL actually changes
   useEffect(() => {
@@ -549,6 +608,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const togglePlay = () => {
     if (isCurrentYouTube) {
+      if (iframeRef.current?.contentWindow) {
+        const cmd = isPlaying ? 'pauseVideo' : 'playVideo';
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: cmd, args: [] }),
+          '*'
+        );
+      }
       setIsPlaying((prev) => !prev);
       return;
     }
@@ -561,19 +627,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const toggleMute = () => {
-    if (!videoRef.current) return;
-    const newMuted = !isMuted;
-    videoRef.current.muted = newMuted;
-    setIsMuted(newMuted);
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+    }
+
+    if (isCurrentYouTube) {
+      syncYouTubeVolume(volume, nextMuted);
+    }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
+    const willBeMuted = newVolume === 0;
+    setIsMuted(willBeMuted);
+
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
-      videoRef.current.muted = newVolume === 0;
-      setIsMuted(newVolume === 0);
+      videoRef.current.muted = willBeMuted;
+    }
+
+    if (isCurrentYouTube) {
+      syncYouTubeVolume(newVolume, willBeMuted);
     }
   };
 
@@ -662,6 +740,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {/* Stream Display: YouTube Live Embed iFrame or HTML5 Video Stream */}
           {isCurrentYouTube ? (
             <iframe
+              ref={iframeRef}
               key={channel.id}
               src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isMuted })}
               title={channel.name}
@@ -669,6 +748,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
+              onLoad={() => {
+                if (iframeRef.current?.contentWindow) {
+                  try {
+                    iframeRef.current.contentWindow.postMessage(
+                      JSON.stringify({ event: 'listening' }),
+                      '*'
+                    );
+                  } catch {}
+                }
+                syncYouTubeVolume(volume, isMuted);
+                setTimeout(() => syncYouTubeVolume(volume, isMuted), 350);
+                setTimeout(() => syncYouTubeVolume(volume, isMuted), 800);
+                setTimeout(() => syncYouTubeVolume(volume, isMuted), 1600);
+              }}
             />
           ) : (
             <video

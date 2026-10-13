@@ -66,16 +66,22 @@ export function getYouTubeEmbedUrl(
   options?: { autoplay?: boolean; mute?: boolean }
 ): string {
   const videoId = extractYouTubeVideoId(input);
+  const autoplay = options?.autoplay !== false ? 1 : 0;
+  const mute = options?.mute ? 1 : 0;
+  const originParam =
+    typeof window !== 'undefined' && window.location?.origin
+      ? `&origin=${encodeURIComponent(window.location.origin)}`
+      : '';
+
   if (!videoId) {
     // If it's already an embed URL, return it
     if (input.includes('youtube.com/embed/')) {
-      return input.includes('?') ? `${input}&autoplay=1` : `${input}?autoplay=1`;
+      return input.includes('?')
+        ? `${input}&autoplay=${autoplay}&enablejsapi=1${originParam}`
+        : `${input}?autoplay=${autoplay}&enablejsapi=1${originParam}`;
     }
     return input;
   }
 
-  const autoplay = options?.autoplay !== false ? 1 : 0;
-  const mute = options?.mute ? 1 : 0;
-
-  return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&enablejsapi=1&playsinline=1`;
+  return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&enablejsapi=1&playsinline=1${originParam}`;
 }
