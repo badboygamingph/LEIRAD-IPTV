@@ -738,6 +738,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [isFullscreen, handleMouseMove]);
 
+  // In Fullscreen mode, hide mouse cursor completely across the entire screen when controls are idle
+  useEffect(() => {
+    const shouldHideCursor = isFullscreen && !showControls && !isControlsPinned && !isSidebarOpen;
+
+    if (shouldHideCursor) {
+      document.documentElement.classList.add('hide-cursor');
+      if (containerRef.current) {
+        containerRef.current.classList.add('hide-cursor');
+      }
+    } else {
+      document.documentElement.classList.remove('hide-cursor');
+      if (containerRef.current) {
+        containerRef.current.classList.remove('hide-cursor');
+      }
+    }
+
+    return () => {
+      document.documentElement.classList.remove('hide-cursor');
+      if (containerRef.current) {
+        containerRef.current.classList.remove('hide-cursor');
+      }
+    };
+  }, [isFullscreen, showControls, isControlsPinned, isSidebarOpen]);
+
   const togglePlay = () => {
     if (isCurrentYouTube) {
       if (iframeRef.current?.contentWindow) {
@@ -1021,7 +1045,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             : isTheaterMode
             ? 'aspect-video max-w-7xl rounded-2xl border border-white/10'
             : 'aspect-video max-w-5xl rounded-2xl border border-white/10 ring-1 ring-white/5'
-        } ${!showControls && isPlaying && !isSidebarOpen && !isControlsPinned ? 'cursor-none' : ''}`}
+        } ${!showControls && !isSidebarOpen && !isControlsPinned ? 'cursor-none [&_*]:cursor-none' : ''}`}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
           {/* Stream Display: YouTube Live Embed iFrame or HTML5 Video Stream */}
@@ -1066,7 +1090,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <div
                   onClick={handleOverlayClick}
                   onDoubleClick={toggleFullscreen}
-                  className="absolute inset-0 z-15 cursor-pointer"
+                  className={`absolute inset-0 z-15 ${
+                    !showControls && !isSidebarOpen && !isControlsPinned
+                      ? 'cursor-none'
+                      : 'cursor-pointer'
+                  }`}
                   title="Click to Play/Pause & Enable Sound · Double-click for Fullscreen"
                 />
               )}
@@ -1090,7 +1118,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           ) : (
             <video
               ref={videoRef}
-              className="w-full h-full object-contain cursor-pointer"
+              className={`w-full h-full object-contain ${
+                !showControls && !isSidebarOpen && !isControlsPinned
+                  ? 'cursor-none'
+                  : 'cursor-pointer'
+              }`}
               onClick={togglePlay}
               playsInline
               crossOrigin="anonymous"
@@ -1330,7 +1362,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               }
             }}
             onMouseMove={handleMouseMove}
-            className="absolute bottom-0 inset-x-0 h-28 z-30 pointer-events-auto"
+            className={`absolute bottom-0 inset-x-0 h-28 z-30 pointer-events-auto ${
+              !showControls && !isSidebarOpen && !isControlsPinned ? 'cursor-none' : ''
+            }`}
           />
 
           {/* Aesthetic Bottom Media Control Bar */}

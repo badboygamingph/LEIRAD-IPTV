@@ -35,3 +35,12 @@ video::cue {
   opacity: 0 !important;
   visibility: hidden !important;
 }
+
+/* Hide mouse cursor completely when player controls are idle/hidden in fullscreen */
+.hide-cursor,
+.hide-cursor *,
+:fullscreen.hide-cursor,
+:fullscreen.hide-cursor * {
+  cursor: none !important;
+}
+
