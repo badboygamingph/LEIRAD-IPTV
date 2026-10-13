@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Channel, PlaylistSource } from './types';
 import { parseM3U, fetchM3UPlaylist, INITIAL_PLAYLIST_SOURCES } from './utils/m3uParser';
+import { LEIRAD_M3U_PLAYLIST } from './data/userPlaylist';
 import { Header } from './components/Header';
 import { VideoPlayer } from './components/VideoPlayer';
 import { TVGuideDrawer } from './components/TVGuideDrawer';
@@ -78,7 +79,12 @@ export const App: React.FC = () => {
         const parsed: PlaylistSource[] = JSON.parse(saved);
         const savedIds = new Set(parsed.map((s) => s.id));
         const missing = INITIAL_PLAYLIST_SOURCES.filter((s) => !savedIds.has(s.id));
-        return [...missing, ...parsed];
+        const combined = [...missing, ...parsed].map((s) =>
+          s.id === 'leirad-official-stations' ? { ...s, content: LEIRAD_M3U_PLAYLIST } : s
+        );
+        const official = combined.filter((s) => s.id === 'leirad-official-stations');
+        const others = combined.filter((s) => s.id !== 'leirad-official-stations');
+        return [...official, ...others];
       }
     } catch (e) {
       console.error(e);
@@ -285,9 +291,15 @@ export const App: React.FC = () => {
         return accumulatedChannels;
       };
 
-      // Retrieve saved channel from localStorage to prevent going back to Channel 1
-      const savedChannelId = typeof window !== 'undefined' ? localStorage.getItem('leirad_tv_current_channel_id') : null;
-      const savedChannelUrl = typeof window !== 'undefined' ? localStorage.getItem('leirad_tv_current_channel_url') : null;
+      // Session indicator: Check if user newly opened the website
+      const isNewSession = typeof window !== 'undefined' && !sessionStorage.getItem('leirad_tv_session_active');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('leirad_tv_session_active', 'true');
+      }
+
+      // If newly opening the website, we prioritize playing the YouTube Live broadcast automatically!
+      const savedChannelId = (!isNewSession && typeof window !== 'undefined') ? localStorage.getItem('leirad_tv_current_channel_id') : null;
+      const savedChannelUrl = (!isNewSession && typeof window !== 'undefined') ? localStorage.getItem('leirad_tv_current_channel_url') : null;
 
       // Stage 1: Load Primary Source Immediately (< 200ms)
       if (primarySource) {
@@ -321,7 +333,7 @@ export const App: React.FC = () => {
             prev.map((s) => (s.id === primarySource.id ? { ...s, channelCount: parsed.length } : s))
           );
 
-          // Restore previously tuned channel from localStorage if present
+          // Restore previously tuned channel from localStorage if present (for existing ongoing sessions)
           let toTune: Channel | null = null;
           if (savedChannelId || savedChannelUrl) {
             toTune =
@@ -332,9 +344,15 @@ export const App: React.FC = () => {
               ) || null;
           }
 
-          if (!toTune) {
-            const playable = currentMerged.filter((c) => !isPageHttps || c.isHttps);
-            toTune = playable[0] || currentMerged[0] || null;
+          // If newly opening the website or no saved station: ALWAYS default to YouTube Live!
+          if (!toTune || isNewSession) {
+            const ytChannel = currentMerged.find((c) => c.isYouTube && (!isPageHttps || c.isHttps)) || currentMerged.find((c) => c.isYouTube);
+            if (ytChannel) {
+              toTune = ytChannel;
+            } else {
+              const playable = currentMerged.filter((c) => !isPageHttps || c.isHttps);
+              toTune = playable[0] || currentMerged[0] || null;
+            }
           }
 
           if (toTune) {
@@ -381,8 +399,8 @@ export const App: React.FC = () => {
       setChannels([...accumulatedChannels]);
       setIsLoading(false);
 
-      // Check if user's saved channel was in the secondary sources and restore it
-      if (savedChannelId || savedChannelUrl) {
+      // Check if user's saved channel was in the secondary sources and restore it (for ongoing sessions)
+      if (!isNewSession && (savedChannelId || savedChannelUrl)) {
         const found = accumulatedChannels.find(
           (c) =>
             (savedChannelId && c.id === savedChannelId) ||
@@ -396,11 +414,13 @@ export const App: React.FC = () => {
         }
       }
 
-      // Fallback if no station was tuned yet
+      // Fallback if no station was tuned yet: prioritize YouTube Live!
       if (!initialLoaded && accumulatedChannels.length > 0) {
+        const ytFallback = accumulatedChannels.find((c) => c.isYouTube && (!isPageHttps || c.isHttps)) || accumulatedChannels.find((c) => c.isYouTube);
         const playable = accumulatedChannels.filter((c) => !isPageHttps || c.isHttps);
-        const initial = playable[0] || accumulatedChannels[0];
-        activeChannelIndexRef.current = 0;
+        const initial = ytFallback || playable[0] || accumulatedChannels[0];
+        const foundIdx = accumulatedChannels.findIndex((c) => c.id === initial.id);
+        activeChannelIndexRef.current = foundIdx >= 0 ? foundIdx : 0;
         setActiveChannel(initial);
       }
     },

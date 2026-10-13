@@ -306,10 +306,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     window.addEventListener('click', handleFirstUserInteraction, { once: true });
     window.addEventListener('keydown', handleFirstUserInteraction, { once: true });
+    window.addEventListener('touchstart', handleFirstUserInteraction, { once: true });
+    window.addEventListener('pointerdown', handleFirstUserInteraction, { once: true });
 
     return () => {
       window.removeEventListener('click', handleFirstUserInteraction);
       window.removeEventListener('keydown', handleFirstUserInteraction);
+      window.removeEventListener('touchstart', handleFirstUserInteraction);
+      window.removeEventListener('pointerdown', handleFirstUserInteraction);
     };
   }, [isCurrentYouTube, isUserExplicitlyMuted, isMuted, ytAutoplayMuted, unmuteYouTube]);
 
@@ -1054,7 +1058,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <iframe
                 ref={iframeRef}
                 key={channel.id}
-                src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isUserExplicitlyMuted })}
+                src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: true })}
                 title={channel.name}
                 className={`w-full h-full border-0 absolute inset-0 z-10 transition-transform duration-300 ${
                   isCleanBroadcastMode ? 'scale-[1.26] pointer-events-none' : 'scale-100 pointer-events-auto'
@@ -1072,13 +1076,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         JSON.stringify({ event: 'listening' }),
                         '*'
                       );
+                      iframeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                        '*'
+                      );
                     } catch {}
                   }
                   if (!isUserExplicitlyMuted) {
                     unmuteYouTube();
-                    setTimeout(() => unmuteYouTube(), 400);
-                    setTimeout(() => unmuteYouTube(), 900);
-                    setTimeout(() => unmuteYouTube(), 1800);
+                    setTimeout(() => unmuteYouTube(), 300);
+                    setTimeout(() => unmuteYouTube(), 800);
+                    setTimeout(() => unmuteYouTube(), 1600);
                   } else {
                     syncYouTubeVolume(volume, true);
                   }

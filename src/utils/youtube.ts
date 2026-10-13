@@ -67,7 +67,7 @@ export function getYouTubeEmbedUrl(
 ): string {
   const videoId = extractYouTubeVideoId(input);
   const autoplay = options?.autoplay !== false ? 1 : 0;
-  const mute = options?.mute ? 1 : 0;
+  const mute = options?.mute !== false ? 1 : 0;
   const originParam =
     typeof window !== 'undefined' && window.location?.origin
       ? `&origin=${window.location.origin}`
@@ -80,8 +80,8 @@ export function getYouTubeEmbedUrl(
     // If it's already an embed URL, return it
     if (input.includes('youtube.com/embed/')) {
       return input.includes('?')
-        ? `${input}&autoplay=${autoplay}&enablejsapi=1${cleanParams}${originParam}`
-        : `${input}?autoplay=${autoplay}&enablejsapi=1${cleanParams}${originParam}`;
+        ? `${input}&autoplay=${autoplay}&mute=${mute}&enablejsapi=1${cleanParams}${originParam}`
+        : `${input}?autoplay=${autoplay}&mute=${mute}&enablejsapi=1${cleanParams}${originParam}`;
     }
     return input;
   }
