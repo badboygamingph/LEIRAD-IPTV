@@ -16,7 +16,8 @@ import {
   Tv,
   Radio,
   Zap,
-  Gauge
+  Gauge,
+  Sparkles
 } from 'lucide-react';
 import { Channel } from '../types';
 import { isYouTubeUrl, getYouTubeEmbedUrl } from '../utils/youtube';
@@ -80,6 +81,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Clean TV Broadcast Mode: automatically hides YouTube top titles, avatar, and bottom buttons
+  const [isCleanBroadcastMode, setIsCleanBroadcastMode] = useState<boolean>(true);
 
   // Anti-Buffer Turbo Engine state: 'anti_buffer' (45s deep buffer) vs 'instant' (15s low latency)
   const [turboBufferMode, setTurboBufferMode] = useState<'anti_buffer' | 'instant'>(() => {
@@ -739,30 +742,47 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <div className="relative w-full h-full flex items-center justify-center bg-black">
           {/* Stream Display: YouTube Live Embed iFrame or HTML5 Video Stream */}
           {isCurrentYouTube ? (
-            <iframe
-              ref={iframeRef}
-              key={channel.id}
-              src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isMuted })}
-              title={channel.name}
-              className="w-full h-full border-0 absolute inset-0 z-10"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen
-              onLoad={() => {
-                if (iframeRef.current?.contentWindow) {
-                  try {
-                    iframeRef.current.contentWindow.postMessage(
-                      JSON.stringify({ event: 'listening' }),
-                      '*'
-                    );
-                  } catch {}
-                }
-                syncYouTubeVolume(volume, isMuted);
-                setTimeout(() => syncYouTubeVolume(volume, isMuted), 350);
-                setTimeout(() => syncYouTubeVolume(volume, isMuted), 800);
-                setTimeout(() => syncYouTubeVolume(volume, isMuted), 1600);
-              }}
-            />
+            <div className="relative w-full h-full overflow-hidden flex items-center justify-center bg-black">
+              <iframe
+                ref={iframeRef}
+                key={channel.id}
+                src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isMuted })}
+                title={channel.name}
+                className={`w-full h-full border-0 absolute inset-0 z-10 transition-transform duration-300 ${
+                  isCleanBroadcastMode ? 'scale-[1.26] pointer-events-none' : 'scale-100 pointer-events-auto'
+                }`}
+                style={{
+                  transformOrigin: 'center center',
+                }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                onLoad={() => {
+                  if (iframeRef.current?.contentWindow) {
+                    try {
+                      iframeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'listening' }),
+                        '*'
+                      );
+                    } catch {}
+                  }
+                  syncYouTubeVolume(volume, isMuted);
+                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 350);
+                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 800);
+                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 1600);
+                }}
+              />
+
+              {/* Transparent Click-to-Play/Pause Overlay (Active in Clean Broadcast Mode to eliminate YouTube popups) */}
+              {isCleanBroadcastMode && (
+                <div
+                  onClick={togglePlay}
+                  onDoubleClick={toggleFullscreen}
+                  className="absolute inset-0 z-15 cursor-pointer"
+                  title="Click to Play/Pause · Double-click for Fullscreen"
+                />
+              )}
+            </div>
           ) : (
             <video
               ref={videoRef}
@@ -1024,9 +1044,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 {/* Anti-Buffer Turbo Engine Indicator & Mode Toggle (or YouTube Live Badge) */}
                 {isCurrentYouTube ? (
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 border border-rose-500/40 text-rose-300 backdrop-blur-md select-none">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                    <span className="font-semibold text-[11px]">YouTube Live Stream</span>
+                  <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 border border-rose-500/40 text-rose-300 backdrop-blur-md select-none">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="font-semibold text-[11px]">YouTube Live</span>
+                    </div>
+
+                    <button
+                      onClick={() => setIsCleanBroadcastMode((prev) => !prev)}
+                      className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer backdrop-blur-md active:scale-95 ${
+                        isCleanBroadcastMode
+                          ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-sm'
+                          : 'bg-white/5 text-slate-300 hover:text-white border-white/10'
+                      }`}
+                      title={
+                        isCleanBroadcastMode
+                          ? 'Clean TV Broadcast Active (Hides YouTube overlays & title). Click to switch to Standard.'
+                          : 'Standard Mode Active (YouTube overlays visible). Click to switch to Clean TV Broadcast.'
+                      }
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                      <span className="font-semibold text-[11px]">
+                        {isCleanBroadcastMode ? 'Clean TV Feed' : 'Standard Feed'}
+                      </span>
+                    </button>
                   </div>
                 ) : (
                   <button

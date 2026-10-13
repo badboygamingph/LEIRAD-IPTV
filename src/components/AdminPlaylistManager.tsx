@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -32,7 +32,9 @@ import {
   AlertTriangle,
   Search,
   SlidersHorizontal,
-  X
+  X,
+  Play,
+  Video
 } from 'lucide-react';
 import { Channel, PlaylistSource } from '../types';
 import {
@@ -44,7 +46,7 @@ import {
   IPTVMATE_ALL_TV,
   IPTV_ORG_GLOBAL
 } from '../utils/m3uParser';
-import { isYouTubeUrl, extractYouTubeTitle, getYouTubeEmbedUrl } from '../utils/youtube';
+import { isYouTubeUrl, extractYouTubeTitle, getYouTubeEmbedUrl, extractYouTubeVideoId } from '../utils/youtube';
 import {
   getSupabaseConfig,
   saveSupabaseConfig,
@@ -100,13 +102,23 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
   isSupabaseConnected = false,
 }) => {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<'playlists' | 'supabase_setup' | 'settings'>('playlists');
+  const [activeTab, setActiveTab] = useState<'playlists' | 'youtube' | 'supabase_setup' | 'settings'>('playlists');
 
-  // Form states: Create
+  // Form states: Create Playlist
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newContent, setNewContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dedicated YouTube Live Stream form state
+  const [ytEmbedInput, setYtEmbedInput] = useState('');
+  const [ytChannelName, setYtChannelName] = useState('');
+  const [ytCategory, setYtCategory] = useState('News');
+  const [ytCountry, setYtCountry] = useState('PH');
+  const [ytLogoUrl, setYtLogoUrl] = useState('');
+  const [ytDetectedId, setYtDetectedId] = useState<string | null>(null);
+  const [isYtSubmitting, setIsYtSubmitting] = useState(false);
+  const [previewYtUrl, setPreviewYtUrl] = useState<string | null>(null);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +149,15 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordNotice, setPasswordNotice] = useState<{ success: boolean; text: string } | null>(null);
+
+  // Active YouTube Live streams across all database sources
+  const activeYouTubeStreams = useMemo(() => {
+    return sources.filter(
+      (s) =>
+        isYouTubeUrl(s.url) ||
+        (s.content && (s.content.includes('<iframe') || isYouTubeUrl(s.content)))
+    );
+  }, [sources]);
 
   // Initialize config values
   useEffect(() => {
@@ -185,6 +206,68 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
       notify(`Error adding source: ${err?.message || 'Failed'}`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle YouTube embed input change with auto-detection of video ID and title
+  const handleYtInputChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    const val = e.target.value;
+    setYtEmbedInput(val);
+    const id = extractYouTubeVideoId(val);
+    setYtDetectedId(id);
+    const title = extractYouTubeTitle(val);
+    if (title && !ytChannelName) {
+      setYtChannelName(title);
+    }
+    if (id && !ytLogoUrl) {
+      setYtLogoUrl(`https://img.youtube.com/vi/${id}/hqdefault.jpg`);
+    }
+  };
+
+  // Add YouTube Live stream directly to Supabase and LEIRAD TV
+  const handleAddYouTubeStream = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = ytEmbedInput.trim();
+    if (!raw) return;
+
+    setIsYtSubmitting(true);
+    const videoId = extractYouTubeVideoId(raw);
+    const embedUrl = getYouTubeEmbedUrl(raw);
+    const extractedTitle = extractYouTubeTitle(raw);
+    const name =
+      ytChannelName.trim() ||
+      extractedTitle ||
+      (videoId ? `YouTube Live Stream (${videoId})` : `YouTube Live Channel ${sources.length + 1}`);
+    const logo = ytLogoUrl.trim() || (videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '');
+    const group = ytCategory.trim() || 'News';
+    const country = ytCountry.trim().toUpperCase() || 'PH';
+
+    // Self-contained M3U structure for this station
+    const m3uContent = `#EXTM3U\n#EXTINF:-1 tvg-id="yt-${videoId || Date.now()}" tvg-logo="${logo}" tvg-country="${country}" group-title="${group}",${name}\n${embedUrl}\n`;
+
+    try {
+      await onAddSource(name, embedUrl, m3uContent);
+      setYtEmbedInput('');
+      setYtChannelName('');
+      setYtLogoUrl('');
+      setYtDetectedId(null);
+      notify(`Successfully added YouTube Live stream "${name}" to Supabase & LEIRAD TV!`);
+    } catch (err: any) {
+      notify(`Error adding stream: ${err?.message || 'Failed'}`);
+    } finally {
+      setIsYtSubmitting(false);
+    }
+  };
+
+  const handleAddYouTubePreset = async (preset: { name: string; url: string; group: string; logo: string }) => {
+    const embedUrl = getYouTubeEmbedUrl(preset.url);
+    const videoId = extractYouTubeVideoId(preset.url);
+    const m3uContent = `#EXTM3U\n#EXTINF:-1 tvg-id="yt-${videoId || Date.now()}" tvg-logo="${preset.logo}" tvg-country="PH" group-title="${preset.group}",${preset.name}\n${embedUrl}\n`;
+    try {
+      await onAddSource(preset.name, embedUrl, m3uContent);
+      notify(`Added verified preset "${preset.name}" to Supabase & LEIRAD TV!`);
+    } catch (err: any) {
+      notify(`Error adding preset: ${err?.message || 'Failed'}`);
     }
   };
 
@@ -369,6 +452,38 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
     { name: 'IPTV-Org Global Index', url: IPTV_ORG_GLOBAL },
   ];
 
+  // Verified Philippine YouTube Live Stream presets
+  const PHILIPPINE_YOUTUBE_PRESETS = [
+    {
+      name: 'Showtime Online U (ABS-CBN Live)',
+      url: '<iframe width="1059" height="595" src="https://www.youtube.com/embed/tamUy3G8N88" title="Showtime Online U | October 13, 2026" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>',
+      group: 'Entertainment',
+      logo: 'https://img.youtube.com/vi/tamUy3G8N88/hqdefault.jpg',
+      badge: 'ABS-CBN Variety',
+    },
+    {
+      name: 'GMA News Live Coverage',
+      url: '<iframe width="1059" height="595" src="https://www.youtube.com/embed/K5aQKcayAKk" title="LIVE - Impeachment Trial of VP Sara Duterte - DAY 39 (Oct. 13, 2026) | GMA News Special Coverage" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>',
+      group: 'News',
+      logo: 'https://img.youtube.com/vi/K5aQKcayAKk/hqdefault.jpg',
+      badge: 'GMA Special Live',
+    },
+    {
+      name: 'ABS-CBN News 24/7 Live Stream',
+      url: 'https://www.youtube.com/watch?v=live',
+      group: 'News',
+      logo: 'https://img.youtube.com/vi/live/hqdefault.jpg',
+      badge: 'Rolling News',
+    },
+    {
+      name: 'PTV 4 Philippines Live',
+      url: 'https://www.youtube.com/@PTVPhilippines/live',
+      group: 'News',
+      logo: 'https://yt3.googleusercontent.com/ytc/AIdro_n4=s176-c-k-c0x00ffffff-no-rj',
+      badge: 'Government TV',
+    },
+  ];
+
   // Filtered sources
   const filteredSources = sources.filter((s) => {
     if (filterEnabled === 'enabled' && !s.enabled) return false;
@@ -428,6 +543,22 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
               Playlists CRUD
             </button>
             <button
+              onClick={() => setActiveTab('youtube')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'youtube'
+                  ? 'bg-rose-500 text-white shadow shadow-rose-500/25'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5" />
+              <span>YouTube Live</span>
+              {activeYouTubeStreams.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px] font-mono font-bold">
+                  {activeYouTubeStreams.length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('supabase_setup')}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'supabase_setup'
@@ -479,6 +610,15 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
           }`}
         >
           Playlists CRUD
+        </button>
+        <button
+          onClick={() => setActiveTab('youtube')}
+          className={`px-3 py-1.5 rounded-lg font-bold shrink-0 flex items-center gap-1 ${
+            activeTab === 'youtube' ? 'bg-rose-500 text-white' : 'text-slate-400'
+          }`}
+        >
+          <Radio className="w-3.5 h-3.5" />
+          <span>YouTube Live ({activeYouTubeStreams.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('supabase_setup')}
@@ -912,6 +1052,368 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
               </div>
             </div>
           </>
+        )}
+
+        {/* TAB: YOUTUBE LIVE STREAMS BROADCAST CENTER */}
+        {activeTab === 'youtube' && (
+          <div className="space-y-6">
+            {/* Header / Mode explanation banner */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-rose-950/60 via-[#0b0f1a] to-slate-900 border border-rose-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono text-[11px] font-bold">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span>YouTube Live Stream Broadcast Engine</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <Radio className="w-6 h-6 text-rose-500" />
+                  <span>YouTube Live Streams & &lt;iframe&gt; Embeds</span>
+                </h2>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Add and broadcast any YouTube Live video stream into LEIRAD TV and Supabase. Paste raw <code className="text-rose-400 bg-rose-950/60 px-1 py-0.5 rounded">&lt;iframe&gt;</code> embed codes or YouTube URLs. LEIRAD TV automatically applies Clean Broadcast Mode to hide YouTube chrome, titles, avatars, share icons, and "More videos" overlays.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-rose-500/20 text-center min-w-[100px]">
+                  <div className="text-2xl font-black text-rose-400 font-mono">
+                    {activeYouTubeStreams.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Active Streams
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Verified 1-Click Philippine Live Presets */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-[#0b0f1a] border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>Quick-Add Verified Philippine Live Stream Presets (1-Click)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Instantly add high-demand Philippine live streams with verified embed parameters directly into Supabase.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {PHILIPPINE_YOUTUBE_PRESETS.map((preset, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-slate-950/70 border border-white/5 hover:border-rose-500/40 transition-all flex flex-col justify-between gap-3 group"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-10 h-10 rounded-lg bg-rose-950/50 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0 overflow-hidden">
+                        {preset.logo ? (
+                          <img
+                            src={preset.logo}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <Radio className="w-5 h-5 text-rose-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-mono font-bold text-rose-400 uppercase">
+                          {preset.badge}
+                        </span>
+                        <h4 className="text-xs font-bold text-white truncate group-hover:text-rose-300 transition-colors">
+                          {preset.name}
+                        </h4>
+                        <span className="text-[10px] text-slate-400">
+                          {preset.group} · PH
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddYouTubePreset(preset)}
+                      className="w-full py-1.5 px-3 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shadow-rose-600/20 cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add to Supabase</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add Custom YouTube Live Stream Form */}
+            <div className="p-5 sm:p-7 rounded-2xl bg-[#0b0f1a] border border-white/10 space-y-5">
+              <div className="pb-3 border-b border-slate-800">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-rose-500" />
+                  <span>Add New Live Stream via YouTube Embed Code or URL</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Paste the full YouTube <code className="text-rose-400">&lt;iframe ...&gt;</code> embed code or a YouTube video link. The video ID, title, and thumbnail are detected automatically.
+                </p>
+              </div>
+
+              <form onSubmit={handleAddYouTubeStream} className="space-y-4">
+                {/* Embed Code / URL Textarea */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span>YouTube &lt;iframe&gt; Embed Code or Live Stream URL *</span>
+                    {ytDetectedId && (
+                      <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40">
+                        ✓ Detected ID: {ytDetectedId}
+                      </span>
+                    )}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={ytEmbedInput}
+                    onChange={handleYtInputChange}
+                    placeholder={`<iframe width="1059" height="595" src="https://www.youtube.com/embed/tamUy3G8N88" title="Showtime Online U | October 13, 2026" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl p-3.5 text-xs text-white font-mono focus:outline-none placeholder:text-slate-600 transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Supports raw <code className="text-slate-300">&lt;iframe src="https://www.youtube.com/embed/..."&gt;</code>, watch URLs (<code className="text-slate-300">youtube.com/watch?v=...</code>), or short links (<code className="text-slate-300">youtu.be/...</code>).
+                  </p>
+                </div>
+
+                {/* Form fields: Channel Name, Category, Country, Logo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 mb-1 block uppercase">
+                      Channel / Broadcast Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={ytChannelName}
+                      onChange={(e) => setYtChannelName(e.target.value)}
+                      placeholder="e.g. Showtime Online U Live"
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 mb-1 block uppercase">
+                      Category / Group
+                    </label>
+                    <select
+                      value={ytCategory}
+                      onChange={(e) => setYtCategory(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                    >
+                      <option value="News">News</option>
+                      <option value="Entertainment">Entertainment</option>
+                      <option value="Variety">Variety</option>
+                      <option value="Sports">Sports</option>
+                      <option value="Music">Music</option>
+                      <option value="General">General</option>
+                      <option value="Philippines General">Philippines General</option>
+                      <option value="Special Coverage">Special Coverage</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 mb-1 block uppercase">
+                      Country Code
+                    </label>
+                    <input
+                      type="text"
+                      value={ytCountry}
+                      onChange={(e) => setYtCountry(e.target.value.toUpperCase())}
+                      maxLength={2}
+                      placeholder="PH"
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono uppercase focus:outline-none placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 mb-1 block uppercase">
+                      Channel Logo / Thumbnail URL
+                    </label>
+                    <input
+                      type="text"
+                      value={ytLogoUrl}
+                      onChange={(e) => setYtLogoUrl(e.target.value)}
+                      placeholder="https://img.youtube.com/vi/.../hqdefault.jpg"
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none placeholder:text-slate-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    {ytDetectedId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewYtUrl(
+                            previewYtUrl === getYouTubeEmbedUrl(ytEmbedInput)
+                              ? null
+                              : getYouTubeEmbedUrl(ytEmbedInput)
+                          )
+                        }
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{previewYtUrl ? 'Hide Live Preview' : 'Test Live Stream Preview'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isYtSubmitting || !ytEmbedInput.trim()}
+                    className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 ml-auto"
+                  >
+                    {isYtSubmitting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Saving Stream to Supabase...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Add Live Stream to Supabase & Live TV</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Inline Live Stream Preview Box */}
+              {previewYtUrl && (
+                <div className="p-4 rounded-xl bg-slate-950 border border-rose-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                      <Radio className="w-4 h-4 text-rose-400 animate-pulse" />
+                      <span>Live Stream Clean Broadcast Test Preview</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewYtUrl(null)}
+                      className="text-xs text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      Close Preview ✕
+                    </button>
+                  </div>
+                  <div className="w-full max-w-2xl mx-auto aspect-video rounded-xl overflow-hidden bg-black relative border border-white/10">
+                    <iframe
+                      src={previewYtUrl}
+                      title="Preview Player"
+                      className="w-full h-full border-0 absolute inset-0 scale-[1.26] pointer-events-none"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Active YouTube Broadcast Channels List */}
+            <div className="p-5 sm:p-7 rounded-2xl bg-[#0b0f1a] border border-white/10 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Tv className="w-5 h-5 text-rose-400" />
+                    <span>Active YouTube Broadcast Channels ({activeYouTubeStreams.length})</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Live video streams currently synchronized with Supabase and available on LEIRAD TV.
+                  </p>
+                </div>
+              </div>
+
+              {activeYouTubeStreams.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 mx-auto">
+                    <Radio className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs">
+                    No custom YouTube live streams added yet. Paste a YouTube &lt;iframe&gt; embed code above or click one of the verified 1-click presets!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activeYouTubeStreams.map((src) => {
+                    const videoId = extractYouTubeVideoId(src.url) || (src.content ? extractYouTubeVideoId(src.content) : null);
+                    const thumb = videoId
+                      ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+                      : 'https://www.youtube.com/s/desktop/f7125345/img/favicon_144x144.png';
+
+                    return (
+                      <div
+                        key={src.id}
+                        className="p-3.5 rounded-xl bg-slate-950/70 border border-white/5 hover:border-white/15 transition-all flex flex-col justify-between gap-3"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-16 h-12 rounded-lg bg-black border border-white/10 overflow-hidden shrink-0 relative flex items-center justify-center">
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                              <Radio className="w-4 h-4 text-white drop-shadow" />
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 font-mono text-[9px] font-bold border border-rose-500/30">
+                                YouTube Live
+                              </span>
+                              {src.enabled ? (
+                                <span className="text-[10px] text-emerald-400 font-bold">● Active</span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500">○ Paused</span>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-bold text-white truncate" title={src.name}>
+                              {src.name}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 truncate font-mono">
+                              {videoId ? `ID: ${videoId}` : src.url}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-900 text-xs">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewYtUrl(getYouTubeEmbedUrl(src.url || src.content || ''))
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Play className="w-3 h-3 text-rose-400" />
+                            <span>Preview</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSource(src)}
+                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
+                            title="Delete Live Stream from Supabase"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* TAB 2: SUPABASE SQL SETUP GUIDE */}

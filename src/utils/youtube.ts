@@ -73,15 +73,18 @@ export function getYouTubeEmbedUrl(
       ? `&origin=${encodeURIComponent(window.location.origin)}`
       : '';
 
+  // Clean broadcast parameters: hides default controls, annotations, branding & keyboard traps
+  const cleanParams = `&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&showinfo=0`;
+
   if (!videoId) {
     // If it's already an embed URL, return it
     if (input.includes('youtube.com/embed/')) {
       return input.includes('?')
-        ? `${input}&autoplay=${autoplay}&enablejsapi=1${originParam}`
-        : `${input}?autoplay=${autoplay}&enablejsapi=1${originParam}`;
+        ? `${input}&autoplay=${autoplay}&enablejsapi=1${cleanParams}${originParam}`
+        : `${input}?autoplay=${autoplay}&enablejsapi=1${cleanParams}${originParam}`;
     }
     return input;
   }
 
-  return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&enablejsapi=1&playsinline=1${originParam}`;
+  return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&enablejsapi=1&playsinline=1${cleanParams}${originParam}`;
 }
