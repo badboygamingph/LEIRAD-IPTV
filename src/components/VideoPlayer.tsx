@@ -18,7 +18,6 @@ import {
   Radio,
   Zap,
   Gauge,
-  Sparkles,
   Pin,
   PinOff
 } from 'lucide-react';
@@ -86,8 +85,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [ytAutoplayMuted, setYtAutoplayMuted] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Clean TV Broadcast Mode: automatically hides YouTube top titles, avatar, and bottom buttons
-  const [isCleanBroadcastMode, setIsCleanBroadcastMode] = useState<boolean>(true);
+  // Clean TV Broadcast Mode: permanently active by default to hide YouTube overlays and title
+  const isCleanBroadcastMode = true;
 
   // Anti-Buffer Turbo Engine state: 'anti_buffer' (45s deep buffer) vs 'instant' (15s low latency)
   const [turboBufferMode, setTurboBufferMode] = useState<'anti_buffer' | 'instant'>(() => {
@@ -1428,25 +1427,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                       <span className="font-semibold text-[11px]">YouTube Live</span>
                     </div>
-
-                    <button
-                      onClick={() => setIsCleanBroadcastMode((prev) => !prev)}
-                      className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer backdrop-blur-md active:scale-95 ${
-                        isCleanBroadcastMode
-                          ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-sm'
-                          : 'bg-white/5 text-slate-300 hover:text-white border-white/10'
-                      }`}
-                      title={
-                        isCleanBroadcastMode
-                          ? 'Clean TV Broadcast Active (Hides YouTube overlays & title). Click to switch to Standard.'
-                          : 'Standard Mode Active (YouTube overlays visible). Click to switch to Clean TV Broadcast.'
-                      }
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-                      <span className="font-semibold text-[11px]">
-                        {isCleanBroadcastMode ? 'Clean TV Feed' : 'Standard Feed'}
-                      </span>
-                    </button>
                   </div>
                 ) : (
                   <button
