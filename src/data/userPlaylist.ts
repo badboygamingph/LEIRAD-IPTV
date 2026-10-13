@@ -1,6 +1,12 @@
 // LEIRAD TV Official M3U Station Playlist
 export const LEIRAD_M3U_PLAYLIST = `#EXTM3U
 
+#EXTINF:-1 tvg-id="showtime.ph" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/4/4b/It%27s_Showtime_logo.png" tvg-country="PH" group-title="Entertainment",Showtime Online U | October 13, 2026
+<iframe width="1059" height="595" src="https://www.youtube.com/embed/tamUy3G8N88" title="Showtime Online U | October 13, 2026" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+#EXTINF:-1 tvg-id="gmanews.ph" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/e/e0/GMA_Integrated_News_logo.png" tvg-country="PH" group-title="News",LIVE - Impeachment Trial of VP Sara Duterte - DAY 39 (Oct. 13, 2026) | GMA News Special Coverage
+<iframe width="1059" height="595" src="https://www.youtube.com/embed/K5aQKcayAKk" title="LIVE - Impeachment Trial of VP Sara Duterte - DAY 39 (Oct. 13, 2026) | GMA News Special Coverage" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
 #EXTINF:-1,TELEMUNDO
 http://iphone-streaming.ustream.tv/ustreamVideo/21733416/streams/live/playlist.m3u8
 #EXTINF:0,TELEMUNDO

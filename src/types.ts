@@ -22,6 +22,8 @@ export interface Channel {
   quality: string;
   tvgId: string;
   isHttps: boolean;
+  isYouTube?: boolean;
+  embedCode?: string;
   sourceId?: string;
   sourceName?: string;
 }

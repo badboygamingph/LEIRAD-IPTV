@@ -230,7 +230,8 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
         const matchCat = (c.group || '').toLowerCase().includes(q);
         const matchCountry = (c.countryName || '').toLowerCase().includes(q);
         const matchSource = (c.sourceName || '').toLowerCase().includes(q);
-        if (!matchName && !matchCat && !matchCountry && !matchSource) return false;
+        const matchYt = Boolean(c.isYouTube && ('youtube'.includes(q) || 'yt'.includes(q) || 'live'.includes(q)));
+        if (!matchName && !matchCat && !matchCountry && !matchSource && !matchYt) return false;
       }
 
       return true;
@@ -680,6 +681,10 @@ export const TVGuideDrawer: React.FC<TVGuideDrawerProps> = ({
                           <span className="px-1.5 py-0.5 rounded-md bg-cyan-400 text-slate-950 text-[10px] font-extrabold uppercase shrink-0 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-pulse" />
                             PLAYING
+                          </span>
+                        ) : c.isYouTube ? (
+                          <span className="px-1.5 py-0.5 rounded-md bg-rose-950/90 border border-rose-500/40 text-rose-300 text-[10px] font-bold shrink-0">
+                            YT LIVE
                           </span>
                         ) : isVerifiedWorking ? (
                           <span className="px-1.5 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold shrink-0">

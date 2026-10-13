@@ -19,6 +19,7 @@ import {
   Gauge
 } from 'lucide-react';
 import { Channel } from '../types';
+import { isYouTubeUrl, getYouTubeEmbedUrl } from '../utils/youtube';
 
 interface VideoPlayerProps {
   channel: Channel | null;
@@ -272,9 +273,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [channel?.id]);
 
+  const isCurrentYouTube = Boolean(channel && (channel.isYouTube || isYouTubeUrl(channel.url)));
+
   // Primary playback initialization: ONLY runs when channel URL actually changes
   useEffect(() => {
-    if (!channel?.url || !videoRef.current) return;
+    if (!channel?.url) return;
 
     if (channel.url === activeUrlRef.current && statusRef.current === 'playing') {
       return;
@@ -284,13 +287,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     clearAutoSkip();
     clearLoadTimeout();
     destroyHls();
+
+    const currentChannelId = channel.id;
+    const isYt = Boolean(channel.isYouTube || isYouTubeUrl(channel.url));
+
+    // Instant seamless playback for YouTube live streams & iframe embeds
+    if (isYt) {
+      consecutiveFailuresRef.current = 0;
+      setStatus('playing');
+      setIsPlaying(true);
+      setIsBuffering(false);
+      setErrorMessage(null);
+      onChannelStatusChangeRef.current?.(currentChannelId, 'working');
+      return;
+    }
+
+    if (!videoRef.current) return;
+
     setStatus('tuning');
     setIsBuffering(false);
     setErrorMessage(null);
     setIsPlaying(false);
 
     const video = videoRef.current;
-    const currentChannelId = channel.id;
     const streamUrl = channel.url;
     const isPageHttps = window.location.protocol === 'https:';
     const isStreamHttp = streamUrl.startsWith('http://');
@@ -529,6 +548,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const togglePlay = () => {
+    if (isCurrentYouTube) {
+      setIsPlaying((prev) => !prev);
+      return;
+    }
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
       videoRef.current.play();
@@ -577,8 +600,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const handleRetry = () => {
-    if (!channel || !videoRef.current) return;
+    if (!channel) return;
     clearAutoSkip();
+    if (isCurrentYouTube) {
+      setStatus('playing');
+      setIsPlaying(true);
+      setErrorMessage(null);
+      return;
+    }
+    if (!videoRef.current) return;
     setStatus('tuning');
     setErrorMessage(null);
     if (hlsRef.current) {
@@ -629,14 +659,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         } ${!showControls && isPlaying && !isSidebarOpen ? 'cursor-none' : ''}`}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
-          {/* Native HTML5 Video Element */}
-          <video
-            ref={videoRef}
-            className="w-full h-full object-contain cursor-pointer"
-            onClick={togglePlay}
-            playsInline
-            crossOrigin="anonymous"
-          />
+          {/* Stream Display: YouTube Live Embed iFrame or HTML5 Video Stream */}
+          {isCurrentYouTube ? (
+            <iframe
+              key={channel.id}
+              src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isMuted })}
+              title={channel.name}
+              className="w-full h-full border-0 absolute inset-0 z-10"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              className="w-full h-full object-contain cursor-pointer"
+              onClick={togglePlay}
+              playsInline
+              crossOrigin="anonymous"
+            />
+          )}
 
           {/* Clean Cinematic On-Screen Display (OSD Banner) when switching channels or hovering */}
           {showOsd && (
@@ -673,8 +715,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-white/10">
-                  <span className="text-[11px] font-mono font-bold tracking-wider text-emerald-400 uppercase">
-                    LIVE
+                  <span
+                    className={`text-[11px] font-mono font-bold tracking-wider uppercase ${
+                      isCurrentYouTube ? 'text-rose-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    {isCurrentYouTube ? 'YT LIVE' : 'LIVE'}
                   </span>
                 </div>
               </div>
@@ -883,30 +929,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   />
                 </div>
 
-                {/* Anti-Buffer Turbo Engine Indicator & Mode Toggle */}
-                <button
-                  onClick={toggleTurboBuffer}
-                  className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer backdrop-blur-md ${
-                    turboBufferMode === 'anti_buffer'
-                      ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                  }`}
-                  title={
-                    turboBufferMode === 'anti_buffer'
-                      ? 'Anti-Buffer Turbo Active (45s deep cache protects against slow internet). Click to toggle.'
-                      : 'Fast Tune Mode (15s low latency). Click to switch to Anti-Buffer Turbo.'
-                  }
-                >
-                  <Gauge className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="font-semibold text-[11px]">
-                    {turboBufferMode === 'anti_buffer' ? 'Anti-Buffer Turbo' : 'Fast Tune'}
-                  </span>
-                  {status === 'playing' && bufferedAhead > 0 && (
-                    <span className="font-mono text-[10px] text-emerald-400/90 pl-1 border-l border-emerald-500/30">
-                      {bufferedAhead}s buffer
+                {/* Anti-Buffer Turbo Engine Indicator & Mode Toggle (or YouTube Live Badge) */}
+                {isCurrentYouTube ? (
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 border border-rose-500/40 text-rose-300 backdrop-blur-md select-none">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    <span className="font-semibold text-[11px]">YouTube Live Stream</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={toggleTurboBuffer}
+                    className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer backdrop-blur-md ${
+                      turboBufferMode === 'anti_buffer'
+                        ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                    title={
+                      turboBufferMode === 'anti_buffer'
+                        ? 'Anti-Buffer Turbo Active (45s deep cache protects against slow internet). Click to toggle.'
+                        : 'Fast Tune Mode (15s low latency). Click to switch to Anti-Buffer Turbo.'
+                    }
+                  >
+                    <Gauge className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="font-semibold text-[11px]">
+                      {turboBufferMode === 'anti_buffer' ? 'Anti-Buffer Turbo' : 'Fast Tune'}
                     </span>
-                  )}
-                </button>
+                    {status === 'playing' && bufferedAhead > 0 && (
+                      <span className="font-mono text-[10px] text-emerald-400/90 pl-1 border-l border-emerald-500/30">
+                        {bufferedAhead}s buffer
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Right Side: Favorite, Sidebar Channel Selector, PiP, Fullscreen */}

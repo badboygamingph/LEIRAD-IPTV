@@ -1,6 +1,7 @@
 import { Channel, PlaylistSource } from '../types';
 import { getCountryFlag, getCountryName } from './countries';
 import { LEIRAD_M3U_PLAYLIST } from '../data/userPlaylist';
+import { isYouTubeUrl, getYouTubeEmbedUrl, extractYouTubeTitle } from './youtube';
 
 // All M3U Playlists requested by the user
 export const PH_M3U_URL = 'https://raw.githubusercontent.com/Harleythetech/IPHTV/main/ph.m3u';
@@ -244,8 +245,17 @@ export function parseM3U(m3uContent: string, options?: ParseOptions): Channel[] 
       const groupMatch = line.match(/group-title="([^"]*)"/i);
       const countryAttrMatch = line.match(/tvg-country="([^"]*)"/i);
 
-      // Name is after the last comma
-      const commaIndex = line.lastIndexOf(',');
+      // Name is after the first comma outside quotes in the #EXTINF line
+      let commaIndex = -1;
+      let inQuotes = false;
+      for (let c = 0; c < line.length; c++) {
+        if (line[c] === '"') inQuotes = !inQuotes;
+        else if (line[c] === ',' && !inQuotes) {
+          commaIndex = c;
+          break;
+        }
+      }
+      if (commaIndex === -1) commaIndex = line.lastIndexOf(',');
       let rawName = commaIndex !== -1 ? line.substring(commaIndex + 1).trim() : 'Unnamed Channel';
 
       const tvgId = tvgIdMatch ? tvgIdMatch[1].trim() : '';
@@ -316,11 +326,42 @@ export function parseM3U(m3uContent: string, options?: ParseOptions): Channel[] 
         countryCode,
         quality,
       };
+    } else if (line.includes('<iframe')) {
+      const isYt = isYouTubeUrl(line);
+      const embedUrl = isYt ? getYouTubeEmbedUrl(line) : (line.match(/src=["']([^"']+)["']/i)?.[1] || '');
+      const ytTitle = currentInfo?.name || extractYouTubeTitle(line) || `Live Stream ${channels.length + 1}`;
+      const countryCode = currentInfo?.countryCode || 'PH';
+      const countryName = getCountryName(countryCode) || 'Philippines';
+      const countryFlag = getCountryFlag(countryCode) || '🇵🇭';
+      if (embedUrl) {
+        channels.push({
+          id: `${sourceId}-${currentInfo?.tvgId || 'yt'}-${channels.length + 1}`,
+          name: ytTitle,
+          url: embedUrl,
+          logo: currentInfo?.logo || 'https://www.youtube.com/s/desktop/f7125345/img/favicon_144x144.png',
+          group: currentInfo?.group || 'YouTube Live',
+          countryCode,
+          countryName,
+          countryFlag,
+          quality: currentInfo?.quality || 'HD',
+          tvgId: currentInfo?.tvgId || '',
+          isHttps: true,
+          isYouTube: true,
+          embedCode: line,
+          sourceId,
+          sourceName,
+        });
+      }
+      currentInfo = null;
     } else if (!line.startsWith('#') && currentInfo) {
       // Line is a stream URL (handle trailing pipe parameters such as |User-Agent=...)
       let streamUrl = line.trim();
       if (streamUrl.includes('|')) {
         streamUrl = streamUrl.split('|')[0].trim();
+      }
+      const isYt = isYouTubeUrl(streamUrl);
+      if (isYt) {
+        streamUrl = getYouTubeEmbedUrl(streamUrl);
       }
       if (streamUrl.startsWith('http://') || streamUrl.startsWith('https://')) {
         const id = `${sourceId}-${currentInfo.tvgId || 'chan'}-${channels.length + 1}`;
@@ -332,14 +373,15 @@ export function parseM3U(m3uContent: string, options?: ParseOptions): Channel[] 
           id,
           name: currentInfo.name,
           url: streamUrl,
-          logo: currentInfo.logo,
-          group: currentInfo.group,
+          logo: currentInfo.logo || (isYt ? 'https://www.youtube.com/s/desktop/f7125345/img/favicon_144x144.png' : ''),
+          group: currentInfo.group || (isYt ? 'YouTube Live' : 'General'),
           countryCode,
           countryName,
           countryFlag,
           quality: currentInfo.quality,
           tvgId: currentInfo.tvgId,
           isHttps: streamUrl.startsWith('https://'),
+          isYouTube: isYt,
           sourceId,
           sourceName,
         });
@@ -359,6 +401,13 @@ export async function fetchM3UPlaylist(url: string, content?: string): Promise<s
   if (content) return content;
   if (url === 'inline://leirad-official-stations' || url.startsWith('inline://')) {
     return LEIRAD_M3U_PLAYLIST;
+  }
+
+  // Handle direct YouTube links or raw <iframe> embed codes supplied as playlist URL
+  if (url.includes('<iframe') || isYouTubeUrl(url)) {
+    const embedUrl = getYouTubeEmbedUrl(url);
+    const title = extractYouTubeTitle(url) || 'YouTube Live Stream';
+    return `#EXTM3U\n#EXTINF:-1 tvg-id="yt-live" tvg-country="PH" group-title="YouTube Live",${title}\n${embedUrl}\n`;
   }
 
   // Check fast in-memory cache

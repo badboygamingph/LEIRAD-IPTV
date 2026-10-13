@@ -44,6 +44,7 @@ import {
   IPTVMATE_ALL_TV,
   IPTV_ORG_GLOBAL
 } from '../utils/m3uParser';
+import { isYouTubeUrl, extractYouTubeTitle, getYouTubeEmbedUrl } from '../utils/youtube';
 import {
   getSupabaseConfig,
   saveSupabaseConfig,
@@ -152,17 +153,36 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
   // Handle Add Source (Create)
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUrl.trim()) return;
+    const rawUrl = newUrl.trim();
+    if (!rawUrl) return;
     setIsSubmitting(true);
-    const name = newName.trim() || `Custom Source ${sources.length + 1}`;
+
+    let finalName = newName.trim();
+    let finalUrl = rawUrl;
+    let finalContent = newContent.trim() || undefined;
+
+    // Support YouTube live iframe codes or direct YouTube URLs:
+    if (rawUrl.includes('<iframe') || isYouTubeUrl(rawUrl)) {
+      const ytTitle = extractYouTubeTitle(rawUrl);
+      if (!finalName && ytTitle) {
+        finalName = ytTitle;
+      }
+      const embedUrl = getYouTubeEmbedUrl(rawUrl);
+      finalName = finalName || 'YouTube Live Channel';
+      finalUrl = embedUrl;
+      finalContent = `#EXTM3U\n#EXTINF:-1 tvg-id="yt-${Date.now()}" tvg-country="PH" group-title="YouTube Live",${finalName}\n${embedUrl}\n`;
+    }
+
+    finalName = finalName || `Custom Source ${sources.length + 1}`;
+
     try {
-      await onAddSource(name, newUrl.trim(), newContent.trim() || undefined);
+      await onAddSource(finalName, finalUrl, finalContent);
       setNewUrl('');
       setNewName('');
       setNewContent('');
-      notify(`Added playlist "${name}" to Supabase & LEIRAD TV.`);
+      notify(`Added source "${finalName}" to Supabase & LEIRAD TV.`);
     } catch (err: any) {
-      notify(`Error adding playlist: ${err?.message || 'Failed'}`);
+      notify(`Error adding source: ${err?.message || 'Failed'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -182,16 +202,32 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSource) return;
+
+    let finalName = editName.trim();
+    let finalUrl = editUrl.trim();
+    let finalContent = editContent.trim() || undefined;
+
+    if (finalUrl.includes('<iframe') || isYouTubeUrl(finalUrl)) {
+      const ytTitle = extractYouTubeTitle(finalUrl);
+      if (!finalName && ytTitle) {
+        finalName = ytTitle;
+      }
+      const embedUrl = getYouTubeEmbedUrl(finalUrl);
+      finalName = finalName || 'YouTube Live Channel';
+      finalUrl = embedUrl;
+      finalContent = `#EXTM3U\n#EXTINF:-1 tvg-id="yt-${Date.now()}" tvg-country="PH" group-title="YouTube Live",${finalName}\n${embedUrl}\n`;
+    }
+
     try {
       await onUpdateSource(editingSource.id, {
-        name: editName.trim(),
-        url: editUrl.trim(),
+        name: finalName,
+        url: finalUrl,
         enabled: editEnabled,
         sortOrder: Number(editSortOrder) || 0,
-        content: editContent.trim() || undefined,
+        content: finalContent,
       });
       setEditingSource(null);
-      notify(`Updated playlist "${editName}".`);
+      notify(`Updated playlist "${finalName}".`);
     } catch (err: any) {
       notify(`Error updating playlist: ${err?.message || 'Failed'}`);
     }
@@ -586,14 +622,14 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
 
                   <div className="md:col-span-2">
                     <label className="text-[11px] font-bold text-slate-400 mb-1 block uppercase">
-                      M3U / M3U8 Feed URL
+                      M3U / M3U8 Feed URL, YouTube Live, or &lt;iframe&gt; Embed Code
                     </label>
                     <div className="flex items-center gap-2">
                       <input
-                        type="url"
+                        type="text"
                         value={newUrl}
                         onChange={(e) => setNewUrl(e.target.value)}
-                        placeholder="https://raw.githubusercontent.com/.../playlist.m3u"
+                        placeholder="https://...playlist.m3u, YouTube Live URL, or <iframe src='...'></iframe>"
                         required
                         className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
                       />
