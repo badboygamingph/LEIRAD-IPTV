@@ -3,6 +3,7 @@ import Hls from 'hls.js';
 import {
   Play,
   Pause,
+  Volume1,
   Volume2,
   VolumeX,
   Maximize2,
@@ -17,7 +18,9 @@ import {
   Radio,
   Zap,
   Gauge,
-  Sparkles
+  Sparkles,
+  Pin,
+  PinOff
 } from 'lucide-react';
 import { Channel } from '../types';
 import { isYouTubeUrl, getYouTubeEmbedUrl } from '../utils/youtube';
@@ -106,8 +109,47 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [status, setStatus] = useState<'idle' | 'tuning' | 'playing' | 'resting'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  // Controls Pin state: keeps bottom control bar visible continuously without auto-hiding
+  const [isControlsPinned, setIsControlsPinned] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('leirad_tv_controls_pinned') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleControlsPinned = useCallback(() => {
+    setIsControlsPinned((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('leirad_tv_controls_pinned', String(next));
+      } catch {}
+      if (next) {
+        setShowControls(true);
+        if (controlsTimeoutRef.current) {
+          window.clearTimeout(controlsTimeoutRef.current);
+          controlsTimeoutRef.current = null;
+        }
+      }
+      return next;
+    });
+  }, []);
   const [showOsd, setShowOsd] = useState(true);
   const [autoSkipCountdown, setAutoSkipCountdown] = useState<number | null>(null);
+
+  // Volume On-Screen Display (HUD) state for real-time visual feedback on stream
+  const [showVolumeOsd, setShowVolumeOsd] = useState(false);
+  const volumeOsdTimeoutRef = useRef<number | null>(null);
+
+  const triggerVolumeOsd = useCallback((_vol?: number, _muted?: boolean) => {
+    setShowVolumeOsd(true);
+    if (volumeOsdTimeoutRef.current) {
+      window.clearTimeout(volumeOsdTimeoutRef.current);
+    }
+    volumeOsdTimeoutRef.current = window.setTimeout(() => {
+      setShowVolumeOsd(false);
+    }, 1800);
+  }, []);
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -176,14 +218,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   );
 
   // Forceful un-mute helper for YouTube streams ensuring music and sound play immediately
-  const unmuteYouTube = useCallback(() => {
+  const unmuteYouTube = useCallback((customVol?: number) => {
     setIsMuted(false);
     setIsUserExplicitlyMuted(false);
     setYtAutoplayMuted(false);
 
-    const targetVolume = volume > 0 ? volume : 0.85;
-    if (volume === 0) setVolume(0.85);
+    const targetVolume = typeof customVol === 'number'
+      ? customVol
+      : (volume > 0 ? volume : 0.85);
+    if (volume === 0 && typeof customVol !== 'number') setVolume(0.85);
     const ytVolume = Math.round(targetVolume * 100);
+
+    triggerVolumeOsd(targetVolume, false);
 
     if (iframeRef.current?.contentWindow) {
       try {
@@ -203,7 +249,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         console.warn('unmuteYouTube error:', err);
       }
     }
-  }, [volume]);
+  }, [volume, triggerVolumeOsd]);
 
   // Synchronize volume & mute to video element AND YouTube iframe without tearing down stream
   useEffect(() => {
@@ -644,28 +690,54 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [channel?.id, clearLoadTimeout, clearAutoSkip, silenceNativeTextTracks]);
 
+  const handleMouseMove = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = null;
+    }
+    if (isPlaying && !isSidebarOpen && !isControlsPinned) {
+      controlsTimeoutRef.current = window.setTimeout(() => {
+        setShowControls(false);
+      }, isFullscreen ? 6500 : 3500);
+    }
+  }, [isPlaying, isSidebarOpen, isFullscreen, isControlsPinned]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const isFs = Boolean(document.fullscreenElement);
+      setIsFullscreen(isFs);
+      setShowControls(true);
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+      if (isFs && isPlaying && !isControlsPinned) {
+        controlsTimeoutRef.current = window.setTimeout(() => {
+          setShowControls(false);
+        }, 6500);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, []);
+  }, [isPlaying, isControlsPinned]);
 
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      window.clearTimeout(controlsTimeoutRef.current);
-    }
-    if (isPlaying && !isSidebarOpen) {
-      controlsTimeoutRef.current = window.setTimeout(() => {
-        setShowControls(false);
-      }, 3500);
-    }
-  };
+  // In Fullscreen mode, listen to window-level mousemove so moving cursor anywhere restores controls
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleGlobalMouseMove = () => {
+      handleMouseMove();
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [isFullscreen, handleMouseMove]);
 
   const togglePlay = () => {
     if (isCurrentYouTube) {
@@ -696,6 +768,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsMuted(nextMuted);
     setIsUserExplicitlyMuted(nextMuted);
 
+    triggerVolumeOsd(volume, nextMuted);
+
     if (videoRef.current) {
       videoRef.current.muted = nextMuted;
     }
@@ -705,13 +779,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setYtAutoplayMuted(false);
         syncYouTubeVolume(volume, true);
       } else {
-        unmuteYouTube();
+        unmuteYouTube(volume);
       }
     }
   };
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
+  const handleVolumeChange = (
+    e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>
+  ) => {
+    const newVolume = parseFloat((e.target as HTMLInputElement).value);
     setVolume(newVolume);
     const willBeMuted = newVolume === 0;
     setIsMuted(willBeMuted);
@@ -720,16 +796,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setYtAutoplayMuted(false);
     }
 
+    triggerVolumeOsd(newVolume, willBeMuted);
+
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
       videoRef.current.muted = willBeMuted;
     }
 
-    if (isCurrentYouTube) {
-      if (willBeMuted) {
-        syncYouTubeVolume(newVolume, true);
-      } else {
-        unmuteYouTube();
+    if (isCurrentYouTube && iframeRef.current?.contentWindow) {
+      const ytVol = Math.round(newVolume * 100);
+      try {
+        if (willBeMuted) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+            '*'
+          );
+        } else {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+            '*'
+          );
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'setVolume', args: [ytVol] }),
+            '*'
+          );
+        }
+      } catch (err) {
+        console.warn('Direct YouTube volume sync failed:', err);
       }
     }
   };
@@ -748,11 +841,116 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
+      setShowControls(true);
       containerRef.current.requestFullscreen().catch(() => {});
     } else {
       document.exitFullscreen().catch(() => {});
     }
   };
+
+  // Keyboard Shortcuts: ArrowUp/Down for volume, M for mute, F for fullscreen, Space for play/pause
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        document.activeElement?.tagName === 'SELECT'
+      ) {
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setShowControls(true);
+        const nextVol = Math.min(1, Math.round((volume + 0.05) * 100) / 100);
+        setVolume(nextVol);
+        setIsMuted(false);
+        setIsUserExplicitlyMuted(false);
+        setYtAutoplayMuted(false);
+        triggerVolumeOsd(nextVol, false);
+        if (videoRef.current) {
+          videoRef.current.volume = nextVol;
+          videoRef.current.muted = false;
+        }
+        if (isCurrentYouTube && iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+            '*'
+          );
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(nextVol * 100)] }),
+            '*'
+          );
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setShowControls(true);
+        const nextVol = Math.max(0, Math.round((volume - 0.05) * 100) / 100);
+        setVolume(nextVol);
+        const willMute = nextVol === 0;
+        setIsMuted(willMute);
+        setIsUserExplicitlyMuted(willMute);
+        triggerVolumeOsd(nextVol, willMute);
+        if (videoRef.current) {
+          videoRef.current.volume = nextVol;
+          videoRef.current.muted = willMute;
+        }
+        if (isCurrentYouTube && iframeRef.current?.contentWindow) {
+          if (willMute) {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+              '*'
+            );
+          } else {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(nextVol * 100)] }),
+              '*'
+            );
+          }
+        }
+      } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setShowControls(true);
+        onNextChannel();
+      } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setShowControls(true);
+        onPrevChannel();
+      } else if (e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setShowControls(true);
+        toggleMute();
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        onOpenGuide?.();
+      } else if (e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        toggleControlsPinned();
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        setShowControls(true);
+        togglePlay();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    volume,
+    isMuted,
+    isCurrentYouTube,
+    toggleMute,
+    toggleFullscreen,
+    togglePlay,
+    triggerVolumeOsd,
+    onNextChannel,
+    onPrevChannel,
+    onOpenGuide,
+    toggleControlsPinned,
+  ]);
 
   const togglePiP = async () => {
     if (!videoRef.current) return;
@@ -812,19 +1010,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }
 
   return (
-    <div className="w-full flex flex-col items-center select-none">
+    <div className={`w-full flex flex-col items-center select-none ${isFullscreen ? 'h-screen w-screen justify-center' : ''}`}>
       {/* Main Video Stream Container */}
       <div
         ref={containerRef}
         onMouseMove={handleMouseMove}
-        onMouseLeave={() => isPlaying && !isSidebarOpen && setShowControls(false)}
-        className={`relative w-full aspect-video bg-black overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] transition-all duration-300 ${
+        onMouseLeave={() => isPlaying && !isSidebarOpen && !isControlsPinned && setShowControls(false)}
+        className={`relative w-full bg-black overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] transition-all duration-300 ${
           isFullscreen
-            ? 'fixed inset-0 z-50 h-screen w-screen max-w-none rounded-none'
+            ? 'w-full h-full max-w-none rounded-none aspect-auto fixed inset-0 z-50'
             : isTheaterMode
-            ? 'max-w-7xl rounded-2xl border border-white/10'
-            : 'max-w-5xl rounded-2xl border border-white/10 ring-1 ring-white/5'
-        } ${!showControls && isPlaying && !isSidebarOpen ? 'cursor-none' : ''}`}
+            ? 'aspect-video max-w-7xl rounded-2xl border border-white/10'
+            : 'aspect-video max-w-5xl rounded-2xl border border-white/10 ring-1 ring-white/5'
+        } ${!showControls && isPlaying && !isSidebarOpen && !isControlsPinned ? 'cursor-none' : ''}`}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
           {/* Stream Display: YouTube Live Embed iFrame or HTML5 Video Stream */}
@@ -898,6 +1096,44 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               playsInline
               crossOrigin="anonymous"
             />
+          )}
+
+          {/* TV-Style Volume On-Screen Display (HUD) on Video Stream */}
+          {showVolumeOsd && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95">
+              <div className="flex flex-col items-center gap-2.5 px-6 py-4 rounded-2xl bg-black/90 border border-white/20 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] min-w-[220px]">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+                  {isMuted || volume === 0 ? (
+                    <VolumeX className="w-6 h-6 text-rose-400" />
+                  ) : volume < 0.5 ? (
+                    <Volume1 className="w-6 h-6 text-cyan-400" />
+                  ) : (
+                    <Volume2 className="w-6 h-6 text-cyan-400" />
+                  )}
+                </div>
+
+                <div className="text-center">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                    {isCurrentYouTube ? 'YouTube Live Audio' : 'Master Volume'}
+                  </div>
+                  <div className="text-2xl font-black text-white font-mono mt-0.5">
+                    {isMuted || volume === 0 ? 'MUTED' : `${Math.round(volume * 100)}%`}
+                  </div>
+                </div>
+
+                {/* Animated Volume Level Progress Bar */}
+                <div className="w-36 h-2 rounded-full bg-white/15 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-150 ${
+                      isMuted || volume === 0
+                        ? 'bg-rose-500 w-0'
+                        : 'bg-gradient-to-r from-cyan-400 to-rose-400'
+                    }`}
+                    style={{ width: `${isMuted ? 0 : Math.round(volume * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Clean Cinematic On-Screen Display (OSD Banner) when switching channels or hovering */}
@@ -1085,10 +1321,40 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
+          {/* Bottom Hover Hotspot Trigger: moving cursor to bottom 110px immediately wakes up controllers */}
+          <div
+            onMouseEnter={() => {
+              setShowControls(true);
+              if (controlsTimeoutRef.current) {
+                window.clearTimeout(controlsTimeoutRef.current);
+                controlsTimeoutRef.current = null;
+              }
+            }}
+            onMouseMove={handleMouseMove}
+            className="absolute bottom-0 inset-x-0 h-28 z-30 pointer-events-auto"
+          />
+
           {/* Aesthetic Bottom Media Control Bar */}
           <div
-            className={`absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/75 to-transparent flex flex-col gap-2 z-20 transition-opacity duration-300 ${
-              showControls || isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            onMouseEnter={() => {
+              setShowControls(true);
+              if (controlsTimeoutRef.current) {
+                window.clearTimeout(controlsTimeoutRef.current);
+                controlsTimeoutRef.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              if (isPlaying && !isSidebarOpen && !isControlsPinned) {
+                if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
+                controlsTimeoutRef.current = window.setTimeout(() => {
+                  setShowControls(false);
+                }, isFullscreen ? 6500 : 3500);
+              }
+            }}
+            className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 pb-4 sm:pb-6 bg-gradient-to-t from-black/98 via-black/85 to-transparent flex flex-col gap-2 z-40 transition-all duration-300 ${
+              showControls || isSidebarOpen || isControlsPinned
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-3 pointer-events-none'
             }`}
           >
             <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
@@ -1133,6 +1399,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   >
                     {isMuted || volume === 0 ? (
                       <VolumeX className="w-4 h-4 text-rose-400" />
+                    ) : volume < 0.5 ? (
+                      <Volume1 className="w-4 h-4" />
                     ) : (
                       <Volume2 className="w-4 h-4" />
                     )}
@@ -1144,9 +1412,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     step="0.05"
                     value={isMuted ? 0 : volume}
                     onChange={handleVolumeChange}
+                    onInput={handleVolumeChange}
                     className="w-16 sm:w-20 accent-cyan-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
                     title={`Volume: ${Math.round(volume * 100)}%`}
                   />
+                  <span className="font-mono text-xs font-bold text-slate-200 min-w-[34px] select-none text-left">
+                    {isMuted || volume === 0 ? 'MUTED' : `${Math.round(volume * 100)}%`}
+                  </span>
                 </div>
 
                 {/* Anti-Buffer Turbo Engine Indicator & Mode Toggle (or YouTube Live Badge) */}
@@ -1203,8 +1475,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 )}
               </div>
 
-              {/* Right Side: Favorite, Sidebar Channel Selector, PiP, Fullscreen */}
+              {/* Right Side: Pin Controls, Favorite, Sidebar Channel Selector, PiP, Fullscreen */}
               <div className="flex items-center gap-2 sm:gap-2.5">
+                {/* Pin Controls (Always Visible) Toggle Button */}
+                <button
+                  onClick={toggleControlsPinned}
+                  className={`p-2 rounded-lg border transition-all cursor-pointer active:scale-95 ${
+                    isControlsPinned
+                      ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-sm shadow-cyan-500/20'
+                      : 'bg-white/5 text-slate-300 hover:text-white border-white/10 hover:bg-white/10'
+                  }`}
+                  title={
+                    isControlsPinned
+                      ? 'Controls Pinned (Always Visible) · Click to auto-hide (K)'
+                      : 'Pin Controls (Keep always visible) (K)'
+                  }
+                >
+                  {isControlsPinned ? (
+                    <Pin className="w-4 h-4 fill-current text-cyan-400" />
+                  ) : (
+                    <PinOff className="w-4 h-4" />
+                  )}
+                </button>
+
                 <button
                   onClick={onToggleFavorite}
                   className={`p-2 rounded-lg border transition-colors cursor-pointer active:scale-95 ${

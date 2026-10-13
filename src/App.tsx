@@ -847,7 +847,10 @@ export const App: React.FC = () => {
 
         {/* Video Player Display with Channel Drawer inside it for seamless Fullscreen support */}
         {channels.length > 0 && (
-          <div ref={playerSectionRef} className="w-full max-w-5xl flex flex-col items-center">
+          <div
+            ref={playerSectionRef}
+            className="w-full max-w-5xl [&:fullscreen]:max-w-none [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:bg-black flex flex-col items-center justify-center"
+          >
             <VideoPlayer
               channel={activeChannel}
               channelIndex={activeChannelIndex}
