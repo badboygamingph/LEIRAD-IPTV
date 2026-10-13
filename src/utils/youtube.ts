@@ -70,7 +70,7 @@ export function getYouTubeEmbedUrl(
   const mute = options?.mute ? 1 : 0;
   const originParam =
     typeof window !== 'undefined' && window.location?.origin
-      ? `&origin=${encodeURIComponent(window.location.origin)}`
+      ? `&origin=${window.location.origin}`
       : '';
 
   // Clean broadcast parameters: hides default controls, annotations, branding & keyboard traps

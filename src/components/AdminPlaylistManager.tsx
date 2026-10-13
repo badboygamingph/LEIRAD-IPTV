@@ -1306,7 +1306,7 @@ export const AdminPlaylistManager: React.FC<AdminPlaylistManagerProps> = ({
                     <iframe
                       src={previewYtUrl}
                       title="Preview Player"
-                      className="w-full h-full border-0 absolute inset-0 scale-[1.26] pointer-events-none"
+                      className="w-full h-full border-0 absolute inset-0 scale-100 pointer-events-auto"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                     />

@@ -79,6 +79,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isUserExplicitlyMuted, setIsUserExplicitlyMuted] = useState(false);
+  const [ytAutoplayMuted, setYtAutoplayMuted] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Clean TV Broadcast Mode: automatically hides YouTube top titles, avatar, and bottom buttons
@@ -173,6 +175,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     []
   );
 
+  // Forceful un-mute helper for YouTube streams ensuring music and sound play immediately
+  const unmuteYouTube = useCallback(() => {
+    setIsMuted(false);
+    setIsUserExplicitlyMuted(false);
+    setYtAutoplayMuted(false);
+
+    const targetVolume = volume > 0 ? volume : 0.85;
+    if (volume === 0) setVolume(0.85);
+    const ytVolume = Math.round(targetVolume * 100);
+
+    if (iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'setVolume', args: [ytVolume] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+      } catch (err) {
+        console.warn('unmuteYouTube error:', err);
+      }
+    }
+  }, [volume]);
+
   // Synchronize volume & mute to video element AND YouTube iframe without tearing down stream
   useEffect(() => {
     if (videoRef.current) {
@@ -180,9 +212,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoRef.current.muted = isMuted;
     }
     if (isCurrentYouTube) {
-      syncYouTubeVolume(volume, isMuted);
+      syncYouTubeVolume(volume, isMuted || isUserExplicitlyMuted);
     }
-  }, [volume, isMuted, isCurrentYouTube, syncYouTubeVolume]);
+  }, [volume, isMuted, isUserExplicitlyMuted, isCurrentYouTube, syncYouTubeVolume]);
 
   // Bidirectional listener: receive play/pause and volume events from YouTube iframe
   useEffect(() => {
@@ -198,7 +230,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             else if (data.info.playerState === 2) setIsPlaying(false);
           }
           if (typeof data.info.muted === 'boolean') {
-            setIsMuted(data.info.muted);
+            if (data.info.muted && !isUserExplicitlyMuted) {
+              // YouTube was muted by browser autoplay policy awaiting user interaction
+              setYtAutoplayMuted(true);
+            } else if (!data.info.muted) {
+              setYtAutoplayMuted(false);
+              setIsMuted(false);
+            }
           }
           if (typeof data.info.volume === 'number' && !data.info.muted) {
             setVolume(data.info.volume / 100);
@@ -209,7 +247,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [isCurrentYouTube]);
+  }, [isCurrentYouTube, isUserExplicitlyMuted]);
+
+  // On first user interaction anywhere in the window, auto-unmute YouTube if browser muted it
+  useEffect(() => {
+    if (!isCurrentYouTube) return;
+
+    const handleFirstUserInteraction = () => {
+      if (!isUserExplicitlyMuted && (isMuted || ytAutoplayMuted)) {
+        unmuteYouTube();
+      }
+    };
+
+    window.addEventListener('click', handleFirstUserInteraction, { once: true });
+    window.addEventListener('keydown', handleFirstUserInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener('click', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+    };
+  }, [isCurrentYouTube, isUserExplicitlyMuted, isMuted, ytAutoplayMuted, unmuteYouTube]);
 
   // Track live forward buffer depth every second
   useEffect(() => {
@@ -360,6 +417,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setIsPlaying(true);
       setIsBuffering(false);
       setErrorMessage(null);
+      setYtAutoplayMuted(false);
       onChannelStatusChangeRef.current?.(currentChannelId, 'working');
       return;
     }
@@ -612,13 +670,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const togglePlay = () => {
     if (isCurrentYouTube) {
       if (iframeRef.current?.contentWindow) {
-        const cmd = isPlaying ? 'pauseVideo' : 'playVideo';
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: cmd, args: [] }),
-          '*'
-        );
+        if (!isPlaying || isMuted || ytAutoplayMuted) {
+          unmuteYouTube();
+          setIsPlaying(true);
+        } else {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+            '*'
+          );
+          setIsPlaying(false);
+        }
       }
-      setIsPlaying((prev) => !prev);
       return;
     }
     if (!videoRef.current) return;
@@ -632,13 +694,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const toggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    setIsUserExplicitlyMuted(nextMuted);
 
     if (videoRef.current) {
       videoRef.current.muted = nextMuted;
     }
 
     if (isCurrentYouTube) {
-      syncYouTubeVolume(volume, nextMuted);
+      if (nextMuted) {
+        setYtAutoplayMuted(false);
+        syncYouTubeVolume(volume, true);
+      } else {
+        unmuteYouTube();
+      }
     }
   };
 
@@ -647,6 +715,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setVolume(newVolume);
     const willBeMuted = newVolume === 0;
     setIsMuted(willBeMuted);
+    setIsUserExplicitlyMuted(willBeMuted);
+    if (!willBeMuted) {
+      setYtAutoplayMuted(false);
+    }
 
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
@@ -654,8 +726,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     if (isCurrentYouTube) {
-      syncYouTubeVolume(newVolume, willBeMuted);
+      if (willBeMuted) {
+        syncYouTubeVolume(newVolume, true);
+      } else {
+        unmuteYouTube();
+      }
     }
+  };
+
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCurrentYouTube) {
+      if (isMuted || ytAutoplayMuted) {
+        unmuteYouTube();
+        return;
+      }
+    }
+    togglePlay();
   };
 
   const toggleFullscreen = () => {
@@ -746,7 +833,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <iframe
                 ref={iframeRef}
                 key={channel.id}
-                src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isMuted })}
+                src={getYouTubeEmbedUrl(channel.url, { autoplay: true, mute: isUserExplicitlyMuted })}
                 title={channel.name}
                 className={`w-full h-full border-0 absolute inset-0 z-10 transition-transform duration-300 ${
                   isCleanBroadcastMode ? 'scale-[1.26] pointer-events-none' : 'scale-100 pointer-events-auto'
@@ -766,21 +853,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       );
                     } catch {}
                   }
-                  syncYouTubeVolume(volume, isMuted);
-                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 350);
-                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 800);
-                  setTimeout(() => syncYouTubeVolume(volume, isMuted), 1600);
+                  if (!isUserExplicitlyMuted) {
+                    unmuteYouTube();
+                    setTimeout(() => unmuteYouTube(), 400);
+                    setTimeout(() => unmuteYouTube(), 900);
+                    setTimeout(() => unmuteYouTube(), 1800);
+                  } else {
+                    syncYouTubeVolume(volume, true);
+                  }
                 }}
               />
 
-              {/* Transparent Click-to-Play/Pause Overlay (Active in Clean Broadcast Mode to eliminate YouTube popups) */}
+              {/* Transparent Click-to-Play/Pause & Unmute Overlay (Active in Clean Broadcast Mode) */}
               {isCleanBroadcastMode && (
                 <div
-                  onClick={togglePlay}
+                  onClick={handleOverlayClick}
                   onDoubleClick={toggleFullscreen}
                   className="absolute inset-0 z-15 cursor-pointer"
-                  title="Click to Play/Pause · Double-click for Fullscreen"
+                  title="Click to Play/Pause & Enable Sound · Double-click for Fullscreen"
                 />
+              )}
+
+              {/* Floating "Tap to Enable Music & Sound" Pill Banner when browser mutes audio on autoplay */}
+              {(isMuted || ytAutoplayMuted) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    unmuteYouTube();
+                  }}
+                  className="absolute top-5 left-1/2 -translate-x-1/2 z-30 px-5 py-2.5 rounded-full bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-[0_10px_25px_rgba(244,63,94,0.6)] border border-white/30 cursor-pointer animate-pulse active:scale-95 transition-all"
+                  title="Click to enable sound and play music from the YouTube Live broadcast"
+                >
+                  <VolumeX className="w-4 h-4 text-white" />
+                  <span>Audio Muted by Browser · Click to Enable Music & Sound 🔊</span>
+                </button>
               )}
             </div>
           ) : (
