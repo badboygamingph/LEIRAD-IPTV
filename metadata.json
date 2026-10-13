@@ -1,0 +1,6 @@
+{
+  "name": "Aether Stream IPTV",
+  "description": "Modern, high-performance IPTV web player powered by global open M3U channels with smart categorization, live search, and HD playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
